@@ -277,11 +277,11 @@ import QuartzCore
             return
         }
 
-        guard niriHandler.registerScrollAnimation(workspaceId, on: targetDisplayId) else { return }
-
-        if let displayLink = getOrCreateDisplayLink(for: targetDisplayId) {
-            displayLink.add(to: .main, forMode: .common)
+        guard let displayLink = getOrCreateDisplayLink(for: targetDisplayId) else { return }
+        guard niriHandler.registerScrollAnimation(workspaceId, on: targetDisplayId) else {
+            return
         }
+        displayLink.add(to: .main, forMode: .common)
     }
 
     func stopScrollAnimation(for displayId: CGDirectDisplayID) {

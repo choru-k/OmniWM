@@ -135,6 +135,49 @@ private func prepareMouseResizeFixture(
     return (controller, controller.mouseEventHandler, handle, workspaceId, node.id, nodeFrame, location)
 }
 
+@MainActor
+private func prepareCommittedTrackpadGestureFixture() async -> (
+    controller: WMController,
+    handler: MouseEventHandler,
+    workspaceId: WorkspaceDescriptor.ID,
+    location: CGPoint
+) {
+    let controller = makeMouseEventTestController()
+    controller.settings.scrollGestureEnabled = true
+    controller.enableNiriLayout(maxWindowsPerColumn: 1)
+    await controller.layoutRefreshController.waitForRefreshWorkForTests()
+    controller.syncMonitorsToNiriEngine()
+
+    guard let workspaceId = controller.activeWorkspace()?.id,
+          let monitor = controller.workspaceManager.monitor(for: workspaceId)
+    else {
+        fatalError("Missing Niri context for committed gesture fixture")
+    }
+
+    let handler = controller.mouseEventHandler
+    let location = CGPoint(x: monitor.visibleFrame.midX, y: monitor.visibleFrame.midY)
+    let baseTime = CACurrentMediaTime()
+
+    handler.receiveTapGestureEvent(
+        .init(
+            location: location,
+            phaseRawValue: NSEvent.Phase.began.rawValue,
+            timestamp: baseTime,
+            touches: makeGestureTouchSamples(xPositions: [0.20, 0.25, 0.30])
+        )
+    )
+    handler.receiveTapGestureEvent(
+        .init(
+            location: location,
+            phaseRawValue: NSEvent.Phase.changed.rawValue,
+            timestamp: baseTime + 0.016,
+            touches: makeGestureTouchSamples(xPositions: [0.60, 0.65, 0.70])
+        )
+    )
+
+    return (controller, handler, workspaceId, location)
+}
+
 @Suite(.serialized) struct MouseEventHandlerTests {
     @Test @MainActor func lockedInputHandlersAreNoOps() async {
         let controller = makeMouseEventTestController()
@@ -506,6 +549,296 @@ private func prepareMouseResizeFixture(
         #expect(handler.state.lockedGestureContext == nil)
     }
 
+    @Test @MainActor func trackpadGestureFinalizesViewportGesture() async {
+        let controller = makeMouseEventTestController()
+        controller.settings.scrollGestureEnabled = true
+        controller.settings.gestureInvertDirection = false
+        controller.enableNiriLayout(maxWindowsPerColumn: 1)
+        await controller.layoutRefreshController.waitForRefreshWorkForTests()
+        controller.syncMonitorsToNiriEngine()
+
+        guard let workspaceId = controller.activeWorkspace()?.id,
+              let monitor = controller.workspaceManager.monitor(for: workspaceId),
+              let engine = controller.niriEngine
+        else {
+            Issue.record("Missing Niri context for gesture diagnostic trace test")
+            return
+        }
+
+        let firstToken = controller.workspaceManager.addWindow(
+            makeMouseEventTestWindow(windowId: 551),
+            pid: getpid(),
+            windowId: 551,
+            to: workspaceId
+        )
+        let secondToken = controller.workspaceManager.addWindow(
+            makeMouseEventTestWindow(windowId: 552),
+            pid: getpid(),
+            windowId: 552,
+            to: workspaceId
+        )
+        guard let firstHandle = controller.workspaceManager.handle(for: firstToken),
+              controller.workspaceManager.handle(for: secondToken) != nil
+        else {
+            Issue.record("Missing handles for gesture diagnostic trace test")
+            return
+        }
+
+        let handles = controller.workspaceManager.entries(in: workspaceId).map(\.handle)
+        _ = engine.syncWindows(
+            handles,
+            in: workspaceId,
+            selectedNodeId: nil,
+            focusedHandle: firstHandle
+        )
+        _ = controller.workspaceManager.setManagedFocus(firstHandle, in: workspaceId, onMonitor: monitor.id)
+        controller.layoutRefreshController.requestImmediateRelayout(reason: .workspaceTransition)
+        await controller.layoutRefreshController.waitForRefreshWorkForTests()
+
+        let handler = controller.mouseEventHandler
+        let location = CGPoint(x: monitor.visibleFrame.midX, y: monitor.visibleFrame.midY)
+        let baseTime = CACurrentMediaTime()
+
+        handler.receiveTapGestureEvent(
+            .init(
+                location: location,
+                phaseRawValue: NSEvent.Phase.began.rawValue,
+                timestamp: baseTime,
+                touches: makeGestureTouchSamples(xPositions: [0.20, 0.25, 0.30])
+            )
+        )
+        handler.receiveTapGestureEvent(
+            .init(
+                location: location,
+                phaseRawValue: NSEvent.Phase.changed.rawValue,
+                timestamp: baseTime + 0.016,
+                touches: makeGestureTouchSamples(xPositions: [0.60, 0.65, 0.70])
+            )
+        )
+        handler.receiveTapGestureEvent(
+            .init(
+                location: location,
+                phaseRawValue: NSEvent.Phase.ended.rawValue,
+                timestamp: baseTime + 0.032,
+                touches: []
+            )
+        )
+
+        let finalizedState = controller.workspaceManager.niriViewportState(for: workspaceId)
+        #expect(handler.state.gesturePhase == .idle)
+        #expect(handler.state.lockedGestureContext == nil)
+        #expect(finalizedState.viewOffsetPixels.isGesture == false)
+        #expect(finalizedState.viewOffsetPixels.isAnimating)
+    }
+
+    @Test @MainActor func trackpadGestureWaitsForNiriRecognitionThreshold() async {
+        let controller = makeMouseEventTestController()
+        controller.settings.scrollGestureEnabled = true
+        controller.enableNiriLayout(maxWindowsPerColumn: 1)
+        await controller.layoutRefreshController.waitForRefreshWorkForTests()
+        controller.syncMonitorsToNiriEngine()
+
+        guard let workspaceId = controller.activeWorkspace()?.id,
+              let monitor = controller.workspaceManager.monitor(for: workspaceId)
+        else {
+            Issue.record("Missing Niri context for gesture recognition threshold test")
+            return
+        }
+
+        let handler = controller.mouseEventHandler
+        let location = CGPoint(x: monitor.visibleFrame.midX, y: monitor.visibleFrame.midY)
+        let baselineState = controller.workspaceManager.niriViewportState(for: workspaceId)
+        let baseTime = CACurrentMediaTime()
+
+        handler.receiveTapGestureEvent(
+            .init(
+                location: location,
+                phaseRawValue: NSEvent.Phase.began.rawValue,
+                timestamp: baseTime,
+                touches: makeGestureTouchSamples(xPositions: [0.50, 0.50, 0.50])
+            )
+        )
+        handler.receiveTapGestureEvent(
+            .init(
+                location: location,
+                phaseRawValue: NSEvent.Phase.changed.rawValue,
+                timestamp: baseTime + 0.016,
+                touches: makeGestureTouchSamples(xPositions: [0.51, 0.51, 0.51])
+            )
+        )
+
+        let updatedState = controller.workspaceManager.niriViewportState(for: workspaceId)
+        #expect(handler.state.gesturePhase == .armed)
+        #expect(handler.state.lockedGestureContext?.workspaceId == workspaceId)
+        #expect(updatedState.viewOffsetPixels.target() == baselineState.viewOffsetPixels.target())
+        #expect(updatedState.viewOffsetPixels.isGesture == false)
+    }
+
+    @Test @MainActor func verticalDominantThreeFingerGestureDoesNotScrollViewport() async {
+        let controller = makeMouseEventTestController()
+        controller.settings.scrollGestureEnabled = true
+        controller.enableNiriLayout(maxWindowsPerColumn: 1)
+        await controller.layoutRefreshController.waitForRefreshWorkForTests()
+        controller.syncMonitorsToNiriEngine()
+
+        guard let workspaceId = controller.activeWorkspace()?.id,
+              let monitor = controller.workspaceManager.monitor(for: workspaceId)
+        else {
+            Issue.record("Missing Niri context for vertical gesture rejection test")
+            return
+        }
+
+        let handler = controller.mouseEventHandler
+        let location = CGPoint(x: monitor.visibleFrame.midX, y: monitor.visibleFrame.midY)
+        let baselineState = controller.workspaceManager.niriViewportState(for: workspaceId)
+        let baseTime = CACurrentMediaTime()
+
+        handler.receiveTapGestureEvent(
+            .init(
+                location: location,
+                phaseRawValue: NSEvent.Phase.began.rawValue,
+                timestamp: baseTime,
+                touches: makeGestureTouchSamples(xPositions: [0.50, 0.50, 0.50])
+            )
+        )
+        handler.receiveTapGestureEvent(
+            .init(
+                location: location,
+                phaseRawValue: NSEvent.Phase.changed.rawValue,
+                timestamp: baseTime + 0.016,
+                touches: makeGestureTouchSamples(
+                    xPositions: [0.51, 0.51, 0.51],
+                    yPosition: 0.62
+                )
+            )
+        )
+
+        let updatedState = controller.workspaceManager.niriViewportState(for: workspaceId)
+        #expect(handler.state.gesturePhase == .idle)
+        #expect(handler.state.lockedGestureContext == nil)
+        #expect(updatedState.viewOffsetPixels.target() == baselineState.viewOffsetPixels.target())
+        #expect(updatedState.viewOffsetPixels.isGesture == false)
+    }
+
+    @Test @MainActor func committedTrackpadGestureFinalizesWhenFingerSetDropsDuringLift() async {
+        let controller = makeMouseEventTestController()
+        controller.settings.scrollGestureEnabled = true
+        controller.settings.gestureInvertDirection = false
+        controller.enableNiriLayout(maxWindowsPerColumn: 1)
+        await controller.layoutRefreshController.waitForRefreshWorkForTests()
+        controller.syncMonitorsToNiriEngine()
+
+        guard let workspaceId = controller.activeWorkspace()?.id,
+              let monitor = controller.workspaceManager.monitor(for: workspaceId),
+              let engine = controller.niriEngine
+        else {
+            Issue.record("Missing Niri context for trackpad release regression test")
+            return
+        }
+
+        let firstToken = controller.workspaceManager.addWindow(
+            makeMouseEventTestWindow(windowId: 561),
+            pid: getpid(),
+            windowId: 561,
+            to: workspaceId
+        )
+        let secondToken = controller.workspaceManager.addWindow(
+            makeMouseEventTestWindow(windowId: 562),
+            pid: getpid(),
+            windowId: 562,
+            to: workspaceId
+        )
+        _ = controller.workspaceManager.addWindow(
+            makeMouseEventTestWindow(windowId: 563),
+            pid: getpid(),
+            windowId: 563,
+            to: workspaceId
+        )
+        guard let firstHandle = controller.workspaceManager.handle(for: firstToken) else {
+            Issue.record("Missing first handle for trackpad release regression test")
+            return
+        }
+
+        let handles = controller.workspaceManager.entries(in: workspaceId).map(\.handle)
+        _ = engine.syncWindows(
+            handles,
+            in: workspaceId,
+            selectedNodeId: nil,
+            focusedHandle: firstHandle
+        )
+        guard engine.findNode(for: secondToken) != nil else {
+            Issue.record("Missing second node for trackpad release regression test")
+            return
+        }
+        for column in engine.columns(in: workspaceId) {
+            column.cachedWidth = 900
+            column.cachedHeight = 800
+        }
+        _ = controller.workspaceManager.setManagedFocus(firstHandle, in: workspaceId, onMonitor: monitor.id)
+        controller.layoutRefreshController.requestImmediateRelayout(reason: .workspaceTransition)
+        await controller.layoutRefreshController.waitForRefreshWorkForTests()
+
+        let handler = controller.mouseEventHandler
+        let location = CGPoint(x: monitor.visibleFrame.midX, y: monitor.visibleFrame.midY)
+        let baseTime = CACurrentMediaTime()
+
+        handler.receiveTapGestureEvent(
+            .init(
+                location: location,
+                phaseRawValue: NSEvent.Phase.began.rawValue,
+                timestamp: baseTime,
+                touches: makeGestureTouchSamples(xPositions: [0.20, 0.25, 0.30])
+            )
+        )
+        handler.receiveTapGestureEvent(
+            .init(
+                location: location,
+                phaseRawValue: NSEvent.Phase.changed.rawValue,
+                timestamp: baseTime + 0.016,
+                touches: makeGestureTouchSamples(xPositions: [0.60, 0.65, 0.70])
+            )
+        )
+
+        let inFlightState = controller.workspaceManager.niriViewportState(for: workspaceId)
+        guard let gesture = inFlightState.viewOffsetPixels.gestureRef else {
+            Issue.record("Expected committed gesture before partial finger lift")
+            return
+        }
+        let columns = engine.columns(in: workspaceId)
+        let expectedActiveColumnIndex = columns.count - 1
+        guard columns.indices.contains(expectedActiveColumnIndex),
+              !columns[expectedActiveColumnIndex].windowNodes.isEmpty
+        else {
+            Issue.record("Expected a target Niri column for trackpad release regression test")
+            return
+        }
+        let expectedSelectedNode = columns[expectedActiveColumnIndex].windowNodes[
+            columns[expectedActiveColumnIndex].activeTileIdx.clamped(to: 0 ... (columns[expectedActiveColumnIndex].windowNodes.count - 1))
+        ]
+        _ = gesture
+
+        handler.receiveTapGestureEvent(
+            .init(
+                location: location,
+                phaseRawValue: 0,
+                timestamp: baseTime + 0.032,
+                touches: [
+                    .init(phase: .touching, normalizedPosition: CGPoint(x: 0.62, y: 0.5)),
+                    .init(phase: .ended, normalizedPosition: CGPoint(x: 0.65, y: 0.5)),
+                    .init(phase: .ended, normalizedPosition: CGPoint(x: 0.70, y: 0.5)),
+                ]
+            )
+        )
+
+        let finalizedState = controller.workspaceManager.niriViewportState(for: workspaceId)
+        #expect(finalizedState.viewOffsetPixels.isGesture == false)
+        #expect(finalizedState.viewOffsetPixels.isAnimating == true)
+        #expect(finalizedState.activeColumnIndex == expectedActiveColumnIndex)
+        #expect(finalizedState.selectedNodeId == expectedSelectedNode.id)
+        #expect(handler.state.gesturePhase == .idle)
+        #expect(handler.state.lockedGestureContext == nil)
+    }
+
     @Test @MainActor func committedTrackpadGestureCancelsViewportWhenContextBecomesUnsupported() async {
         let controller = makeMouseEventTestController(
             workspaceConfigurations: [
@@ -594,6 +927,48 @@ private func prepareMouseResizeFixture(
         #expect(handler.state.gesturePhase == .idle)
         #expect(handler.state.lockedGestureContext == nil)
         #expect(relayoutReasons == [.interactiveGesture])
+    }
+
+    @Test @MainActor func committedTrackpadGestureResetsWhenControllerIsDisabled() async {
+        let (controller, handler, workspaceId, location) = await prepareCommittedTrackpadGestureFixture()
+        #expect(handler.state.gesturePhase == .committed)
+        #expect(controller.workspaceManager.niriViewportState(for: workspaceId).viewOffsetPixels.isGesture)
+
+        controller.isEnabled = false
+        handler.receiveTapGestureEvent(
+            .init(
+                location: location,
+                phaseRawValue: NSEvent.Phase.changed.rawValue,
+                touches: makeGestureTouchSamples(xPositions: [0.70, 0.75, 0.80])
+            )
+        )
+
+        let cancelledState = controller.workspaceManager.niriViewportState(for: workspaceId)
+        #expect(handler.state.gesturePhase == .idle)
+        #expect(handler.state.lockedGestureContext == nil)
+        #expect(cancelledState.viewOffsetPixels.isGesture == false)
+        #expect(cancelledState.viewOffsetPixels.isAnimating == false)
+    }
+
+    @Test @MainActor func committedTrackpadGestureResetsWhenScrollGesturesAreDisabled() async {
+        let (controller, handler, workspaceId, location) = await prepareCommittedTrackpadGestureFixture()
+        #expect(handler.state.gesturePhase == .committed)
+        #expect(controller.workspaceManager.niriViewportState(for: workspaceId).viewOffsetPixels.isGesture)
+
+        controller.settings.scrollGestureEnabled = false
+        handler.receiveTapGestureEvent(
+            .init(
+                location: location,
+                phaseRawValue: NSEvent.Phase.changed.rawValue,
+                touches: makeGestureTouchSamples(xPositions: [0.70, 0.75, 0.80])
+            )
+        )
+
+        let cancelledState = controller.workspaceManager.niriViewportState(for: workspaceId)
+        #expect(handler.state.gesturePhase == .idle)
+        #expect(handler.state.lockedGestureContext == nil)
+        #expect(cancelledState.viewOffsetPixels.isGesture == false)
+        #expect(cancelledState.viewOffsetPixels.isAnimating == false)
     }
 
     @Test @MainActor func scrollBurstOnlyMergesWithinMatchingModifierAndPhaseGroups() {
@@ -784,6 +1159,74 @@ private func prepareMouseResizeFixture(
 
         #expect(controller.workspaceManager.focusedHandle == fullscreenHandle)
         #expect(controller.workspaceManager.pendingFocusedHandle == nil)
+    }
+
+    @Test @MainActor func focusFollowsMouseActivatesVisibleNiriWindowWithoutRecenteringViewport() async {
+        let controller = makeMouseEventTestController()
+        controller.enableNiriLayout(maxWindowsPerColumn: 1)
+        await controller.layoutRefreshController.waitForRefreshWorkForTests()
+        controller.syncMonitorsToNiriEngine()
+        controller.setFocusFollowsMouse(true)
+
+        guard let workspaceId = controller.activeWorkspace()?.id,
+              let engine = controller.niriEngine,
+              let monitor = controller.workspaceManager.monitor(for: workspaceId)
+        else {
+            Issue.record("Missing Niri context for hover focus-follow viewport regression test")
+            return
+        }
+
+        let firstToken = controller.workspaceManager.addWindow(
+            makeMouseEventTestWindow(windowId: 931),
+            pid: getpid(),
+            windowId: 931,
+            to: workspaceId
+        )
+        let secondToken = controller.workspaceManager.addWindow(
+            makeMouseEventTestWindow(windowId: 932),
+            pid: getpid(),
+            windowId: 932,
+            to: workspaceId
+        )
+        guard let firstHandle = controller.workspaceManager.handle(for: firstToken),
+              let secondHandle = controller.workspaceManager.handle(for: secondToken)
+        else {
+            Issue.record("Missing handles for Niri hover focus-follow viewport regression test")
+            return
+        }
+
+        let handles = controller.workspaceManager.entries(in: workspaceId).map(\.handle)
+        _ = engine.syncWindows(
+            handles,
+            in: workspaceId,
+            selectedNodeId: nil,
+            focusedHandle: firstHandle
+        )
+        _ = controller.workspaceManager.setManagedFocus(firstHandle, in: workspaceId, onMonitor: monitor.id)
+        controller.layoutRefreshController.requestImmediateRelayout(reason: .workspaceTransition)
+        await controller.layoutRefreshController.waitForRefreshWorkForTests()
+
+        guard let secondNode = engine.findNode(for: secondHandle),
+              let hoveredFrame = secondNode.frame
+        else {
+            Issue.record("Missing second node frame for Niri hover focus-follow viewport regression test")
+            return
+        }
+
+        let initialState = controller.workspaceManager.niriViewportState(for: workspaceId)
+
+        controller.mouseEventHandler.dispatchMouseMoved(
+            at: CGPoint(x: hoveredFrame.midX, y: hoveredFrame.midY)
+        )
+        await controller.layoutRefreshController.waitForRefreshWorkForTests()
+
+        let updatedState = controller.workspaceManager.niriViewportState(for: workspaceId)
+        #expect(controller.workspaceManager.focusedHandle == firstHandle)
+        #expect(controller.workspaceManager.pendingFocusedHandle == secondHandle)
+        #expect(updatedState.selectedNodeId == secondNode.id)
+        #expect(updatedState.activeColumnIndex == initialState.activeColumnIndex)
+        #expect(updatedState.viewOffsetPixels.target() == initialState.viewOffsetPixels.target())
+        #expect(controller.niriLayoutHandler.scrollAnimationByDisplay[monitor.displayId] == nil)
     }
 
     @Test @MainActor func focusFollowsMouseActivatesHoveredDwindleWindow() async {

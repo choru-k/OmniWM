@@ -473,6 +473,11 @@ final class AXEventHandler: CGSEventDelegate {
             return
         }
 
+        if controller.niriLayoutHandler.hasScrollAnimation(for: entry.workspaceId) {
+            debugCounters.geometryRelayoutsSuppressedDuringGesture += 1
+            return
+        }
+
         debugCounters.geometryRelayoutRequests += 1
         controller.layoutRefreshController.requestRelayout(reason: .axWindowChanged)
     }
@@ -1097,9 +1102,12 @@ final class AXEventHandler: CGSEventDelegate {
            let _ = controller.workspaceManager.monitor(for: wsId)
         {
             var state = controller.workspaceManager.niriViewportState(for: wsId)
+            let preserveActiveViewport = state.viewOffsetPixels.isGesture || state.viewOffsetPixels.isAnimating
             controller.niriLayoutHandler.activateNode(
                 node, in: wsId, state: &state,
-                options: .init(layoutRefresh: isWorkspaceActive, axFocus: false)
+                options: preserveActiveViewport
+                    ? .init(ensureVisible: false, layoutRefresh: false, axFocus: false, startAnimation: false)
+                    : .init(layoutRefresh: isWorkspaceActive, axFocus: false)
             )
             _ = controller.workspaceManager.applySessionPatch(
                 .init(

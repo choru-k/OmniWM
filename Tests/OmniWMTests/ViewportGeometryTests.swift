@@ -161,6 +161,157 @@ private func makeViewportGestureContainers(widths: [CGFloat]) -> [NiriContainer]
         #expect(abs(Double(state.viewOffsetPixels.target()) - 150) < 0.001)
     }
 
+    @Test func slowTrackpadGestureSnapsBackToCurrentColumn() {
+        var state = ViewportState()
+        let columns = makeViewportGestureContainers(widths: [300, 300, 300])
+
+        state.beginGesture(isTrackpad: true)
+        _ = state.updateGesture(
+            deltaPixels: 20,
+            timestamp: 1.0,
+            isTrackpad: true,
+            columns: columns,
+            gap: 10,
+            viewportWidth: 500
+        )
+        state.endGesture(
+            columns: columns,
+            gap: 10,
+            viewportWidth: 500,
+            motion: .disabled,
+            isTrackpad: true,
+            centerMode: .never,
+            timestamp: 1.5
+        )
+
+        #expect(state.activeColumnIndex == 0)
+        #expect(abs(Double(state.targetViewPosPixels(columns: columns, gap: 10)) + 10) < 0.001)
+        #expect(abs(Double(state.viewOffsetPixels.target()) + 10) < 0.001)
+    }
+
+    @Test func fastTrackpadGestureUsesProjectedMomentumForSnapTarget() {
+        var state = ViewportState()
+        let columns = makeViewportGestureContainers(widths: [300, 300, 300])
+
+        state.beginGesture(isTrackpad: true)
+        _ = state.updateGesture(
+            deltaPixels: 200,
+            timestamp: 1.0,
+            isTrackpad: true,
+            columns: columns,
+            gap: 10,
+            viewportWidth: 500
+        )
+        state.endGesture(
+            columns: columns,
+            gap: 10,
+            viewportWidth: 500,
+            motion: .disabled,
+            isTrackpad: true,
+            centerMode: .never,
+            timestamp: 1.016
+        )
+
+        #expect(state.activeColumnIndex == 2)
+        #expect(abs(Double(state.targetViewPosPixels(columns: columns, gap: 10)) - 430) < 0.001)
+        #expect(abs(Double(state.viewOffsetPixels.target()) + 190) < 0.001)
+    }
+
+    @Test func trackpadMomentumSnapAtStripEndNeverWrapsToFront() {
+        var state = ViewportState()
+        let columns = makeViewportGestureContainers(widths: [300, 300, 300, 300, 300])
+
+        state.beginGesture(isTrackpad: true)
+        _ = state.updateGesture(
+            deltaPixels: 2_000,
+            timestamp: 1.0,
+            isTrackpad: true,
+            columns: columns,
+            gap: 10,
+            viewportWidth: 500
+        )
+        state.endGesture(
+            columns: columns,
+            gap: 10,
+            viewportWidth: 500,
+            motion: .disabled,
+            isTrackpad: true,
+            centerMode: .never,
+            timestamp: 1.016
+        )
+
+        #expect(state.activeColumnIndex == 4)
+        #expect(abs(Double(state.targetViewPosPixels(columns: columns, gap: 10)) - 1_050) < 0.001)
+        #expect(abs(Double(state.viewOffsetPixels.target()) + 190) < 0.001)
+    }
+
+    @Test func preservedTrackpadOffsetKeepsHalfVisibleActiveColumn() {
+        var state = ViewportState()
+        state.viewOffsetToRestore = 99
+        state.beginGesture(isTrackpad: true)
+        state.viewOffsetPixels.gestureRef?.applyDelta(120)
+
+        let columns = makeViewportGestureContainers(widths: [300, 300, 300])
+        state.endGesture(
+            columns: columns,
+            gap: 10,
+            viewportWidth: 500,
+            motion: .enabled,
+            isTrackpad: true,
+            snapToColumn: false,
+            centerMode: .never
+        )
+
+        #expect(state.activeColumnIndex == 0)
+        #expect(abs(Double(state.targetViewPosPixels(columns: columns, gap: 10)) - 120) < 0.001)
+        #expect(abs(Double(state.viewOffsetPixels.target()) - 120) < 0.001)
+        #expect(state.viewOffsetToRestore == 99)
+    }
+
+    @Test func preservedTrackpadOffsetRebasesToMostVisibleColumnWithoutMovingView() {
+        var state = ViewportState()
+        state.viewOffsetToRestore = 99
+        state.beginGesture(isTrackpad: true)
+        state.viewOffsetPixels.gestureRef?.applyDelta(220)
+
+        let columns = makeViewportGestureContainers(widths: [300, 300, 300])
+        state.endGesture(
+            columns: columns,
+            gap: 10,
+            viewportWidth: 500,
+            motion: .enabled,
+            isTrackpad: true,
+            snapToColumn: false,
+            centerMode: .never
+        )
+
+        #expect(state.activeColumnIndex == 1)
+        #expect(abs(Double(state.targetViewPosPixels(columns: columns, gap: 10)) - 220) < 0.001)
+        #expect(abs(Double(state.viewOffsetPixels.target()) + 90) < 0.001)
+        #expect(state.viewOffsetToRestore == nil)
+    }
+
+    @Test func preservedTrackpadOffsetClampsAtStripEndWithoutWrappingToFront() {
+        var state = ViewportState()
+        state.beginGesture(isTrackpad: true)
+        state.viewOffsetPixels.gestureRef?.applyDelta(10_000)
+
+        let columns = makeViewportGestureContainers(widths: [300, 300, 300, 300, 300])
+        state.endGesture(
+            columns: columns,
+            gap: 10,
+            viewportWidth: 500,
+            motion: .enabled,
+            isTrackpad: true,
+            snapToColumn: false,
+            centerMode: .never
+        )
+
+        #expect(state.activeColumnIndex == 4)
+        #expect(abs(Double(state.targetViewPosPixels(columns: columns, gap: 10)) - 1_040) < 0.001)
+        #expect(abs(Double(state.viewOffsetPixels.target()) + 200) < 0.001)
+    }
+
     @Test func endGesturePreservingTrackpadOffsetClampsPastContentBounds() {
         var state = ViewportState()
         state.beginGesture(isTrackpad: true)
@@ -185,7 +336,9 @@ private func makeViewportGestureContainers(widths: [CGFloat]) -> [NiriContainer]
             centerMode: .never
         )
 
-        #expect(abs(Double(state.viewOffsetPixels.target()) - 410) < 0.001)
+        #expect(state.activeColumnIndex == 1)
+        #expect(abs(Double(state.targetViewPosPixels(columns: columns, gap: 10)) - 410) < 0.001)
+        #expect(abs(Double(state.viewOffsetPixels.target()) - 100) < 0.001)
     }
 
     @Test func gestureIgnoresMismatchedInputSource() {

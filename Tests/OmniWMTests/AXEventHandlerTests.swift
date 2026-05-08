@@ -628,6 +628,7 @@ private func waitUntilAXEventTest(
 
         controller.hasStartedServices = true
         controller.setBordersEnabled(true)
+        controller.setAnimationsEnabled(false, persist: false)
         controller.enableNiriLayout(maxWindowsPerColumn: 1)
         controller.updateNiriConfig(
             maxVisibleColumns: 1,
@@ -771,6 +772,93 @@ private func waitUntilAXEventTest(
         await controller.layoutRefreshController.waitForSettledRefreshWorkForTests()
 
         #expect(lastAppliedBorderWindowId(on: controller) == Int(newWindowId))
+    }
+
+    @Test @MainActor func focusConfirmationPreservesActiveViewportSpring() async {
+        let controller = makeAXEventTestController()
+        guard let monitor = controller.workspaceManager.monitors.first,
+              let workspaceId = controller.workspaceManager.activeWorkspaceOrFirst(on: monitor.id)?.id
+        else {
+            Issue.record("Missing monitor or workspace for active viewport focus confirmation test")
+            return
+        }
+
+        controller.enableNiriLayout(maxWindowsPerColumn: 1)
+        controller.updateNiriConfig(
+            maxVisibleColumns: 1,
+            centerFocusedColumn: .never,
+            alwaysCenterSingleColumn: false
+        )
+        await controller.layoutRefreshController.waitForRefreshWorkForTests()
+        controller.syncMonitorsToNiriEngine()
+
+        let oldToken = controller.workspaceManager.addWindow(
+            AXWindowRef(element: AXUIElementCreateSystemWide(), windowId: 876),
+            pid: getpid(),
+            windowId: 876,
+            to: workspaceId
+        )
+        let newToken = controller.workspaceManager.addWindow(
+            AXWindowRef(element: AXUIElementCreateSystemWide(), windowId: 877),
+            pid: getpid(),
+            windowId: 877,
+            to: workspaceId
+        )
+        guard let oldHandle = controller.workspaceManager.handle(for: oldToken),
+              let engine = controller.niriEngine
+        else {
+            Issue.record("Missing Niri setup for active viewport focus confirmation test")
+            return
+        }
+
+        let handles = controller.workspaceManager.entries(in: workspaceId).map(\.handle)
+        _ = engine.syncWindows(
+            handles,
+            in: workspaceId,
+            selectedNodeId: nil,
+            focusedHandle: oldHandle
+        )
+        for column in engine.columns(in: workspaceId) {
+            column.cachedWidth = 900
+            column.cachedHeight = 800
+        }
+
+        guard let oldNode = engine.findNode(for: oldToken),
+              let newNode = engine.findNode(for: newToken),
+              let newEntry = controller.workspaceManager.entry(for: newToken)
+        else {
+            Issue.record("Missing Niri nodes for active viewport focus confirmation test")
+            return
+        }
+
+        let springTarget = CGFloat(-700)
+        controller.workspaceManager.withNiriViewportState(for: workspaceId) { state in
+            state.selectedNodeId = oldNode.id
+            state.activeColumnIndex = 0
+            state.viewOffsetPixels = .spring(
+                SpringAnimation(
+                    from: -900,
+                    to: Double(springTarget),
+                    initialVelocity: 9_000,
+                    startTime: 0,
+                    config: .snappy
+                )
+            )
+        }
+
+        controller.axEventHandler.handleManagedAppActivation(
+            entry: newEntry,
+            isWorkspaceActive: true,
+            appFullscreen: false,
+            source: .focusedWindowChanged
+        )
+
+        let updatedState = controller.workspaceManager.niriViewportState(for: workspaceId)
+        #expect(updatedState.selectedNodeId == newNode.id)
+        #expect(updatedState.activeColumnIndex == 0)
+        #expect(updatedState.viewOffsetPixels.isAnimating)
+        #expect(updatedState.viewOffsetPixels.target() == springTarget)
+        #expect(controller.workspaceManager.focusedToken == newToken)
     }
 
     @Test @MainActor func newAppActivationWaitsForFocusedWindowBeforeLeavingManagedFocus() async throws {
@@ -2369,6 +2457,104 @@ private func waitUntilAXEventTest(
         #expect(controller.axEventHandler.debugCounters.geometryRelayoutRequests == 0)
         #expect(controller.axEventHandler.debugCounters.geometryRelayoutsSuppressedDuringGesture == 1)
         #expect(lastAppliedBorderWindowId(on: controller) == 815)
+    }
+
+    @Test @MainActor func committedViewportGestureSuppressesFrameChangedRelayout() {
+        let controller = makeAXEventTestController()
+        guard let workspaceId = controller.activeWorkspace()?.id else {
+            Issue.record("Missing active workspace")
+            return
+        }
+
+        let handle = controller.workspaceManager.addWindow(
+            AXWindowRef(element: AXUIElementCreateSystemWide(), windowId: 817),
+            pid: getpid(),
+            windowId: 817,
+            to: workspaceId
+        )
+        _ = controller.workspaceManager.setManagedFocus(
+            handle,
+            in: workspaceId,
+            onMonitor: controller.workspaceManager.monitorId(for: workspaceId)
+        )
+
+        controller.axEventHandler.frameProvider = { _ in
+            CGRect(x: 20, y: 20, width: 640, height: 480)
+        }
+        controller.setBordersEnabled(true)
+        controller.mouseEventHandler.state.gesturePhase = .committed
+        controller.axEventHandler.resetDebugStateForTests()
+        defer {
+            controller.mouseEventHandler.state.gesturePhase = .idle
+            controller.axEventHandler.frameProvider = nil
+        }
+
+        var relayoutReasons: [RefreshReason] = []
+        controller.layoutRefreshController.resetDebugState()
+        controller.layoutRefreshController.debugHooks.onRelayout = { reason, _ in
+            relayoutReasons.append(reason)
+            return true
+        }
+
+        controller.axEventHandler.cgsEventObserver(
+            CGSEventObserver.shared,
+            didReceive: .frameChanged(windowId: 817)
+        )
+
+        #expect(relayoutReasons.isEmpty)
+        #expect(controller.axEventHandler.debugCounters.geometryRelayoutRequests == 0)
+        #expect(controller.axEventHandler.debugCounters.geometryRelayoutsSuppressedDuringGesture == 1)
+        #expect(lastAppliedBorderWindowId(on: controller) == 817)
+    }
+
+    @Test @MainActor func niriScrollAnimationSuppressesFrameChangedRelayout() {
+        let controller = makeAXEventTestController()
+        guard let workspaceId = controller.activeWorkspace()?.id,
+              let monitor = controller.workspaceManager.monitor(for: workspaceId)
+        else {
+            Issue.record("Missing active workspace")
+            return
+        }
+
+        let handle = controller.workspaceManager.addWindow(
+            AXWindowRef(element: AXUIElementCreateSystemWide(), windowId: 818),
+            pid: getpid(),
+            windowId: 818,
+            to: workspaceId
+        )
+        _ = controller.workspaceManager.setManagedFocus(
+            handle,
+            in: workspaceId,
+            onMonitor: controller.workspaceManager.monitorId(for: workspaceId)
+        )
+
+        controller.axEventHandler.frameProvider = { _ in
+            CGRect(x: 24, y: 24, width: 640, height: 480)
+        }
+        controller.setBordersEnabled(true)
+        controller.axEventHandler.resetDebugStateForTests()
+        #expect(controller.niriLayoutHandler.registerScrollAnimation(workspaceId, on: monitor.displayId))
+        defer {
+            controller.layoutRefreshController.stopScrollAnimation(for: monitor.displayId)
+            controller.axEventHandler.frameProvider = nil
+        }
+
+        var relayoutReasons: [RefreshReason] = []
+        controller.layoutRefreshController.resetDebugState()
+        controller.layoutRefreshController.debugHooks.onRelayout = { reason, _ in
+            relayoutReasons.append(reason)
+            return true
+        }
+
+        controller.axEventHandler.cgsEventObserver(
+            CGSEventObserver.shared,
+            didReceive: .frameChanged(windowId: 818)
+        )
+
+        #expect(relayoutReasons.isEmpty)
+        #expect(controller.axEventHandler.debugCounters.geometryRelayoutRequests == 0)
+        #expect(controller.axEventHandler.debugCounters.geometryRelayoutsSuppressedDuringGesture == 1)
+        #expect(lastAppliedBorderWindowId(on: controller) == 818)
     }
 
     @Test @MainActor func interactiveGestureUsesFastFrameProviderWhenPrimaryProviderIsMissing() {

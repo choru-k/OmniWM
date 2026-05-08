@@ -94,6 +94,10 @@ extension ViewportState {
         viewOffsetPixels = .static(viewOffsetPixels.target())
     }
 
+    mutating func settleAtCurrentOffset() {
+        viewOffsetPixels = .static(viewOffsetPixels.current())
+    }
+
     mutating func reset() {
         activeColumnIndex = 0
         viewOffsetPixels = .static(0.0)

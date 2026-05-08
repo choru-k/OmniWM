@@ -60,7 +60,8 @@ extension ViewportState {
         alwaysCenterSingleColumn: Bool = false,
         workingArea: CGRect? = nil,
         viewFrame: CGRect? = nil,
-        scale: CGFloat = 2.0
+        scale: CGFloat = 2.0,
+        timestamp: TimeInterval? = nil
     ) {
         guard case let .gesture(gesture) = viewOffsetPixels else {
             return
@@ -70,7 +71,7 @@ extension ViewportState {
         }
 
         let currentOffsetForFallback = gesture.current()
-        let now = animationClock?.now() ?? CACurrentMediaTime()
+        let now = timestamp ?? animationClock?.now() ?? CACurrentMediaTime()
         gesture.tracker.push(delta: 0, timestamp: now)
 
         let normFactor = gesture.isTrackpad
@@ -186,6 +187,11 @@ extension ViewportState {
     private struct SnapPoint {
         let viewPos: Double
         let columnIndex: Int
+    }
+
+    private struct PreservedGestureOffset {
+        let finalOffset: Double
+        let normalizedActiveColumn: Int
     }
 
     private func findSnapPointsAndTarget(
@@ -579,20 +585,111 @@ extension ViewportState {
         let totalColumnWidth = Double(totalWidth(columns: columns, gap: gap))
         let viewportWidth = Double(viewportWidth)
 
-        if totalColumnWidth.isFinite,
-           viewportWidth.isFinite,
-           totalColumnWidth > viewportWidth,
-           viewportWidth > 0
-        {
-            let activeColX = Double(columnX(at: activeColumnIndex, columns: columns, gap: gap))
-            let viewPos = activeColX + currentOffset
-            let maxViewPos = totalColumnWidth - viewportWidth
-            finalOffset = viewPos.clamped(to: 0 ... maxViewPos) - activeColX
+        if let preservedOffset = normalizedPreservedGestureOffset(
+            currentOffset: currentOffset,
+            columns: columns,
+            gap: gap,
+            viewportWidth: viewportWidth,
+            totalColumnWidth: totalColumnWidth
+        ) {
+            finalOffset = preservedOffset.finalOffset
+            if activeColumnIndex != preservedOffset.normalizedActiveColumn {
+                viewOffsetToRestore = nil
+            }
+            activeColumnIndex = preservedOffset.normalizedActiveColumn
         }
 
         viewOffsetPixels = .static(CGFloat(finalOffset))
         activatePrevColumnOnRemoval = nil
         selectionProgress = 0.0
+    }
+
+    private func normalizedPreservedGestureOffset(
+        currentOffset: Double,
+        columns: [NiriContainer],
+        gap: CGFloat,
+        viewportWidth: Double,
+        totalColumnWidth: Double
+    ) -> PreservedGestureOffset? {
+        guard !columns.isEmpty,
+              totalColumnWidth.isFinite,
+              totalColumnWidth > 0,
+              viewportWidth.isFinite,
+              viewportWidth > 0
+        else {
+            return nil
+        }
+
+        let previousActiveColumn = activeColumnIndex.clamped(to: 0 ... columns.count - 1)
+        let gap = Double(gap)
+        var positions: [Double] = []
+        positions.reserveCapacity(columns.count)
+        var runningPosition = 0.0
+        for column in columns {
+            positions.append(runningPosition)
+            runningPosition += Double(column.cachedWidth) + gap
+        }
+
+        let previousActiveX = positions[previousActiveColumn]
+        let rawViewStart = previousActiveX + currentOffset
+        let maxViewStart = max(0, totalColumnWidth - viewportWidth)
+        let viewStart = rawViewStart.clamped(to: 0 ... maxViewStart)
+        let viewEnd = viewStart + viewportWidth
+
+        let currentColumnWidth = max(0, Double(columns[previousActiveColumn].cachedWidth))
+        let currentColumnOverlap = visibleOverlap(
+            start: previousActiveX,
+            end: previousActiveX + currentColumnWidth,
+            viewStart: viewStart,
+            viewEnd: viewEnd
+        )
+        let normalizedActiveColumn: Int
+        if currentColumnWidth > 0, currentColumnOverlap + 0.001 >= currentColumnWidth / 2.0 {
+            normalizedActiveColumn = previousActiveColumn
+        } else {
+            let viewportCenter = viewStart + viewportWidth / 2.0
+            var bestIndex = previousActiveColumn
+            var bestOverlap = -Double.infinity
+            var bestCenterDistance = Double.infinity
+
+            for (index, column) in columns.enumerated() {
+                let columnStart = positions[index]
+                let columnWidth = max(0, Double(column.cachedWidth))
+                let columnEnd = columnStart + columnWidth
+                let overlap = visibleOverlap(
+                    start: columnStart,
+                    end: columnEnd,
+                    viewStart: viewStart,
+                    viewEnd: viewEnd
+                )
+                let centerDistance = abs((columnStart + columnEnd) / 2.0 - viewportCenter)
+
+                if overlap > bestOverlap + 0.001 ||
+                    (abs(overlap - bestOverlap) <= 0.001 && centerDistance < bestCenterDistance)
+                {
+                    bestIndex = index
+                    bestOverlap = overlap
+                    bestCenterDistance = centerDistance
+                }
+            }
+
+            normalizedActiveColumn = bestIndex
+        }
+
+        let normalizedActiveX = positions[normalizedActiveColumn]
+        return PreservedGestureOffset(
+            finalOffset: viewStart - normalizedActiveX,
+            normalizedActiveColumn: normalizedActiveColumn
+        )
+    }
+
+    private func visibleOverlap(
+        start: Double,
+        end: Double,
+        viewStart: Double,
+        viewEnd: Double
+    ) -> Double {
+        max(0, min(end, viewEnd) - max(start, viewStart))
     }
 
     private mutating func endGestureWithoutSnap(currentOffset: Double) {

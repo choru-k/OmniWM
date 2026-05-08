@@ -57,6 +57,10 @@ private func hasPendingNiriAnimationWork(
         return true
     }
 
+    func hasScrollAnimation(for workspaceId: WorkspaceDescriptor.ID) -> Bool {
+        scrollAnimationByDisplay.values.contains(workspaceId)
+    }
+
     func tickScrollAnimation(targetTime: CFTimeInterval, displayId: CGDirectDisplayID) {
         guard let wsId = scrollAnimationByDisplay[displayId] else { return }
         guard let controller, let engine = controller.niriEngine else {
