@@ -77,6 +77,16 @@ final class CommandHandler {
             focusDownOrLeftInNiri()
         case .focusUpOrRight:
             focusUpOrRightInNiri()
+        case let .focusWindowInColumn(index):
+            focusWindowInColumnInNiri(index: index)
+        case .focusWindowTop:
+            focusWindowTopInNiri()
+        case .focusWindowBottom:
+            focusWindowBottomInNiri()
+        case .focusWindowDownOrTop:
+            focusWindowDownOrTopInNiri()
+        case .focusWindowUpOrBottom:
+            focusWindowUpOrBottomInNiri()
         case .focusColumnFirst:
             focusColumnFirstInNiri()
         case .focusColumnLast:
@@ -227,6 +237,72 @@ final class CommandHandler {
     private func focusUpOrRightInNiri() {
         executeCombinedNavigation { engine, currentNode, wsId, motion, state, workingFrame, gaps in
             engine.focusUpOrRight(
+                currentSelection: currentNode,
+                in: wsId,
+                motion: motion,
+                state: &state,
+                workingFrame: workingFrame,
+                gaps: gaps
+            )
+        }
+    }
+
+    private func focusWindowInColumnInNiri(index: Int) {
+        executeCombinedNavigation { engine, currentNode, wsId, motion, state, workingFrame, gaps in
+            engine.focusWindowInColumn(
+                index,
+                currentSelection: currentNode,
+                in: wsId,
+                motion: motion,
+                state: &state,
+                workingFrame: workingFrame,
+                gaps: gaps
+            )
+        }
+    }
+
+    private func focusWindowTopInNiri() {
+        executeCombinedNavigation { engine, currentNode, wsId, motion, state, workingFrame, gaps in
+            engine.focusWindowTop(
+                currentSelection: currentNode,
+                in: wsId,
+                motion: motion,
+                state: &state,
+                workingFrame: workingFrame,
+                gaps: gaps
+            )
+        }
+    }
+
+    private func focusWindowBottomInNiri() {
+        executeCombinedNavigation { engine, currentNode, wsId, motion, state, workingFrame, gaps in
+            engine.focusWindowBottom(
+                currentSelection: currentNode,
+                in: wsId,
+                motion: motion,
+                state: &state,
+                workingFrame: workingFrame,
+                gaps: gaps
+            )
+        }
+    }
+
+    private func focusWindowDownOrTopInNiri() {
+        executeCombinedNavigation { engine, currentNode, wsId, motion, state, workingFrame, gaps in
+            engine.focusWindowDownOrTop(
+                currentSelection: currentNode,
+                in: wsId,
+                motion: motion,
+                state: &state,
+                workingFrame: workingFrame,
+                gaps: gaps
+            )
+        }
+    }
+
+    private func focusWindowUpOrBottomInNiri() {
+        executeCombinedNavigation { engine, currentNode, wsId, motion, state, workingFrame, gaps in
+            engine.focusWindowUpOrBottom(
                 currentSelection: currentNode,
                 in: wsId,
                 motion: motion,

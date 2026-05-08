@@ -1120,8 +1120,8 @@ private func makePersistedRestoreCatalogFixture(
         #expect(!ids.contains("moveWorkspaceToMonitor.down"))
         #expect(!ids.contains("moveWorkspaceToMonitor.next"))
         #expect(!ids.contains("moveWorkspaceToMonitor.previous"))
-        #expect(!ids.contains("focusWindowTop"))
-        #expect(!ids.contains("focusWindowBottom"))
+        #expect(ids.contains("focusWindowTop"))
+        #expect(ids.contains("focusWindowBottom"))
         #expect(!ids.contains("summonWorkspace.0"))
         #expect(!ids.contains("summonWorkspace.1"))
         #expect(!ids.contains("summonWorkspace.2"))
@@ -1300,7 +1300,6 @@ private func makePersistedRestoreCatalogFixture(
             """
             [
               { "id": "moveToMonitor.left", "binding": "Control+Option+Left" },
-              { "id": "focusWindowTop", "binding": "Option+Shift+Home" },
               { "id": "move.left", "binding": "Control+Option+K" }
             ]
             """.utf8
@@ -1314,7 +1313,6 @@ private func makePersistedRestoreCatalogFixture(
             modifiers: UInt32(controlKey | optionKey)
         ))
         #expect(settings.hotkeyBindings.contains { $0.id == "moveToMonitor.left" } == false)
-        #expect(settings.hotkeyBindings.contains { $0.id == "focusWindowTop" } == false)
     }
 
     @Test func mergedImportDataDropsRemovedDirectionalBindingsWithoutTouchingValidOnes() throws {

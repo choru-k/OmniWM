@@ -163,6 +163,10 @@ enum ActionCatalog {
         specs.append(contentsOf: [
             action(id: "focusDownOrLeft", command: .focusDownOrLeft, category: .focus, binding: .unassigned),
             action(id: "focusUpOrRight", command: .focusUpOrRight, category: .focus, binding: .unassigned),
+            action(id: "focusWindowTop", command: .focusWindowTop, category: .focus, binding: .unassigned),
+            action(id: "focusWindowBottom", command: .focusWindowBottom, category: .focus, binding: .unassigned),
+            action(id: "focusWindowDownOrTop", command: .focusWindowDownOrTop, category: .focus, binding: .unassigned),
+            action(id: "focusWindowUpOrBottom", command: .focusWindowUpOrBottom, category: .focus, binding: .unassigned),
         ])
 
         specs.append(contentsOf: [
@@ -213,6 +217,17 @@ enum ActionCatalog {
                     command: .focusColumn(idx),
                     category: .focus,
                     binding: KeyBinding(keyCode: code, modifiers: UInt32(optionKey | controlKey))
+                )
+            )
+        }
+
+        for idx in 1 ... 9 {
+            specs.append(
+                action(
+                    id: "focusWindowInColumn.\(idx)",
+                    command: .focusWindowInColumn(idx),
+                    category: .focus,
+                    binding: .unassigned
                 )
             )
         }
@@ -305,6 +320,8 @@ enum ActionCatalog {
              .expandColumnToAvailableWidth, .resetWindowHeight,
              .setColumnWidth, .setWindowWidth, .setWindowHeight,
              .focusPrevious, .focusDownOrLeft, .focusUpOrRight,
+             .focusWindowInColumn, .focusWindowTop, .focusWindowBottom,
+             .focusWindowDownOrTop, .focusWindowUpOrBottom,
              .focusColumnFirst, .focusColumnLast, .focusColumn:
             .niri
 
@@ -350,6 +367,11 @@ enum ActionCatalog {
         case .toggleColumnTabbed: "Toggle Column Tabbed"
         case .focusDownOrLeft: "Traverse Backward"
         case .focusUpOrRight: "Traverse Forward"
+        case let .focusWindowInColumn(idx): "Focus Window \(idx) in Column"
+        case .focusWindowTop: "Focus Top Window"
+        case .focusWindowBottom: "Focus Bottom Window"
+        case .focusWindowDownOrTop: "Focus Down or Top"
+        case .focusWindowUpOrBottom: "Focus Up or Bottom"
         case .focusColumnFirst: "Focus First Column"
         case .focusColumnLast: "Focus Last Column"
         case let .focusColumn(idx): "Focus Column \(idx + 1)"
@@ -401,6 +423,16 @@ enum ActionCatalog {
             .focusDownOrLeft
         case .focusUpOrRight:
             .focusUpOrRight
+        case .focusWindowInColumn:
+            .focusWindowInColumn
+        case .focusWindowTop:
+            .focusWindowTop
+        case .focusWindowBottom:
+            .focusWindowBottom
+        case .focusWindowDownOrTop:
+            .focusWindowDownOrTop
+        case .focusWindowUpOrBottom:
+            .focusWindowUpOrBottom
         case .focusColumn:
             .focusColumn
         case .focusColumnFirst:

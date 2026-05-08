@@ -662,6 +662,13 @@ enum CLIParser {
         return columnIndex
     }
 
+    private static func parseWindowIndex(_ rawValue: String) throws -> Int {
+        guard let windowIndex = Int(rawValue), windowIndex > 0 else {
+            throw CLIParseError.usage(usageText)
+        }
+        return windowIndex
+    }
+
     private static func parseResizeOperation(_ rawValue: String) throws -> IPCResizeOperation {
         guard let operation = IPCResizeOperation(rawValue: rawValue) else {
             throw CLIParseError.usage(usageText)
@@ -706,6 +713,8 @@ enum CLIParser {
             return .integer(try parseWorkspaceNumber(token))
         case .columnIndex:
             return .integer(try parseColumnIndex(token))
+        case .windowIndex:
+            return .integer(try parseWindowIndex(token))
         case .layout:
             return .layout(try parseWorkspaceLayout(token))
         case .resizeOperation:

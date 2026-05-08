@@ -455,17 +455,158 @@ extension NiriLayoutEngine {
         workingFrame: CGRect,
         gaps: CGFloat
     ) -> NiriNode? {
+        focusWindowAtNiriIndex(
+            windowIndex,
+            currentSelection: currentSelection,
+            in: workspaceId,
+            motion: motion,
+            state: &state,
+            workingFrame: workingFrame,
+            gaps: gaps
+        )
+    }
+
+    func focusWindowTop(
+        currentSelection: NiriNode,
+        in workspaceId: WorkspaceDescriptor.ID,
+        motion: MotionSnapshot,
+        state: inout ViewportState,
+        workingFrame: CGRect,
+        gaps: CGFloat
+    ) -> NiriNode? {
+        focusWindowAtVisualIndex(
+            0,
+            currentSelection: currentSelection,
+            in: workspaceId,
+            motion: motion,
+            state: &state,
+            workingFrame: workingFrame,
+            gaps: gaps
+        )
+    }
+
+    func focusWindowBottom(
+        currentSelection: NiriNode,
+        in workspaceId: WorkspaceDescriptor.ID,
+        motion: MotionSnapshot,
+        state: inout ViewportState,
+        workingFrame: CGRect,
+        gaps: CGFloat
+    ) -> NiriNode? {
+        focusWindowAtVisualIndex(
+            Int.max,
+            currentSelection: currentSelection,
+            in: workspaceId,
+            motion: motion,
+            state: &state,
+            workingFrame: workingFrame,
+            gaps: gaps
+        )
+    }
+
+    func focusWindowDownOrTop(
+        currentSelection: NiriNode,
+        in workspaceId: WorkspaceDescriptor.ID,
+        motion: MotionSnapshot,
+        state: inout ViewportState,
+        workingFrame: CGRect,
+        gaps: CGFloat
+    ) -> NiriNode? {
+        if let target = moveSelectionVertical(direction: .down, currentSelection: currentSelection) {
+            ensureSelectionVisible(
+                node: target,
+                in: workspaceId,
+                motion: motion,
+                state: &state,
+                workingFrame: workingFrame,
+                gaps: gaps
+            )
+            return target
+        }
+
+        return focusWindowTop(
+            currentSelection: currentSelection,
+            in: workspaceId,
+            motion: motion,
+            state: &state,
+            workingFrame: workingFrame,
+            gaps: gaps
+        )
+    }
+
+    func focusWindowUpOrBottom(
+        currentSelection: NiriNode,
+        in workspaceId: WorkspaceDescriptor.ID,
+        motion: MotionSnapshot,
+        state: inout ViewportState,
+        workingFrame: CGRect,
+        gaps: CGFloat
+    ) -> NiriNode? {
+        if let target = moveSelectionVertical(direction: .up, currentSelection: currentSelection) {
+            ensureSelectionVisible(
+                node: target,
+                in: workspaceId,
+                motion: motion,
+                state: &state,
+                workingFrame: workingFrame,
+                gaps: gaps
+            )
+            return target
+        }
+
+        return focusWindowBottom(
+            currentSelection: currentSelection,
+            in: workspaceId,
+            motion: motion,
+            state: &state,
+            workingFrame: workingFrame,
+            gaps: gaps
+        )
+    }
+
+    private func focusWindowAtNiriIndex(
+        _ oneBasedWindowIndex: Int,
+        currentSelection: NiriNode,
+        in workspaceId: WorkspaceDescriptor.ID,
+        motion: MotionSnapshot,
+        state: inout ViewportState,
+        workingFrame: CGRect,
+        gaps: CGFloat
+    ) -> NiriNode? {
+        let visualIndex = oneBasedWindowIndex <= 1 ? 0 : oneBasedWindowIndex - 1
+        return focusWindowAtVisualIndex(
+            visualIndex,
+            currentSelection: currentSelection,
+            in: workspaceId,
+            motion: motion,
+            state: &state,
+            workingFrame: workingFrame,
+            gaps: gaps
+        )
+    }
+
+    private func focusWindowAtVisualIndex(
+        _ visualIndex: Int,
+        currentSelection: NiriNode,
+        in workspaceId: WorkspaceDescriptor.ID,
+        motion: MotionSnapshot,
+        state: inout ViewportState,
+        workingFrame: CGRect,
+        gaps: CGFloat
+    ) -> NiriNode? {
         guard let currentColumn = column(of: currentSelection) else { return nil }
 
         let windows = currentColumn.windowNodes
-        guard windows.indices.contains(windowIndex) else { return nil }
+        guard !windows.isEmpty else { return nil }
 
-        currentColumn.setActiveTileIdx(windowIndex)
+        let clampedVisualIndex = min(max(visualIndex, 0), windows.count - 1)
+        let storageIndex = windows.count - 1 - clampedVisualIndex
+        currentColumn.setActiveTileIdx(storageIndex)
         if currentColumn.isTabbed {
             updateTabbedColumnVisibility(column: currentColumn)
         }
 
-        let target = windows[windowIndex]
+        let target = windows[storageIndex]
         ensureSelectionVisible(
             node: target,
             in: workspaceId,

@@ -37,6 +37,7 @@ public enum IPCCommandArgumentKind: String, Codable, CaseIterable, Equatable, Se
     case direction
     case workspaceNumber = "workspace-number"
     case columnIndex = "column-index"
+    case windowIndex = "window-index"
     case layout
     case resizeOperation = "resize-operation"
     case sizeChange = "size-change"
@@ -45,7 +46,7 @@ public enum IPCCommandArgumentKind: String, Codable, CaseIterable, Equatable, Se
         switch self {
         case .direction:
             "<left|right|up|down>"
-        case .workspaceNumber, .columnIndex:
+        case .workspaceNumber, .columnIndex, .windowIndex:
             "<number>"
         case .layout:
             "<default|niri|dwindle>"
@@ -239,6 +240,10 @@ public enum IPCAutomationManifest {
         kind: .columnIndex,
         summary: "One-based column index."
     )
+    private static let windowIndexArgument = IPCCommandArgumentDescriptor(
+        kind: .windowIndex,
+        summary: "One-based window index within the focused column."
+    )
     private static let layoutArgument = IPCCommandArgumentDescriptor(
         kind: .layout,
         summary: "Workspace layout selection."
@@ -409,6 +414,11 @@ public enum IPCAutomationManifest {
         command(["focus", "previous"], name: .focusPrevious, summary: "Focus the previously focused window.", layoutCompatibility: .niri),
         command(["focus", "down-or-left"], name: .focusDownOrLeft, summary: "Traverse backward through the active Niri workspace.", layoutCompatibility: .niri),
         command(["focus", "up-or-right"], name: .focusUpOrRight, summary: "Traverse forward through the active Niri workspace.", layoutCompatibility: .niri),
+        command(["focus-window-in-column"], name: .focusWindowInColumn, summary: "Focus a window in the focused Niri column by one-based index.", arguments: [windowIndexArgument], layoutCompatibility: .niri),
+        command(["focus-window", "top"], name: .focusWindowTop, summary: "Focus the top window in the focused Niri column.", layoutCompatibility: .niri),
+        command(["focus-window", "bottom"], name: .focusWindowBottom, summary: "Focus the bottom window in the focused Niri column.", layoutCompatibility: .niri),
+        command(["focus-window", "down-or-top"], name: .focusWindowDownOrTop, summary: "Focus down in the focused Niri column, wrapping to the top.", layoutCompatibility: .niri),
+        command(["focus-window", "up-or-bottom"], name: .focusWindowUpOrBottom, summary: "Focus up in the focused Niri column, wrapping to the bottom.", layoutCompatibility: .niri),
         command(["focus-column"], name: .focusColumn, summary: "Focus a Niri column by one-based index.", arguments: [columnIndexArgument], layoutCompatibility: .niri),
         command(["focus-column", "first"], name: .focusColumnFirst, summary: "Focus the first Niri column.", layoutCompatibility: .niri),
         command(["focus-column", "last"], name: .focusColumnLast, summary: "Focus the last Niri column.", layoutCompatibility: .niri),

@@ -2856,6 +2856,133 @@ private func makeCenteredCrossMonitorFixture(
         #expect(fixture.controller.workspaceManager.niriViewportState(for: fixture.workspaceId).selectedNodeId == fixture.middleWindow.id)
     }
 
+    @Test @MainActor func focusWindowInColumnUsesNiriVisualOneBasedClamping() async {
+        let fixture = await makeSingleColumnFocusFixture(displayMode: .tabbed)
+        let workingFrame = fixture.controller.insetWorkingFrame(for: fixture.monitor)
+        let gap = CGFloat(fixture.controller.workspaceManager.gaps)
+        let motion = fixture.controller.motionPolicy.snapshot()
+        var state = fixture.controller.workspaceManager.niriViewportState(for: fixture.workspaceId)
+
+        let first = fixture.engine.focusWindowInColumn(
+            1,
+            currentSelection: fixture.middleWindow,
+            in: fixture.workspaceId,
+            motion: motion,
+            state: &state,
+            workingFrame: workingFrame,
+            gaps: gap
+        )
+
+        #expect(first?.id == fixture.topWindow.id)
+        #expect(fixture.column.activeTileIdx == 2)
+        #expect(fixture.column.activeVisualTileIdx == 0)
+        #expect(!fixture.topWindow.isHiddenInTabbedMode)
+        #expect(fixture.middleWindow.isHiddenInTabbedMode)
+
+        let zero = fixture.engine.focusWindowInColumn(
+            0,
+            currentSelection: fixture.middleWindow,
+            in: fixture.workspaceId,
+            motion: motion,
+            state: &state,
+            workingFrame: workingFrame,
+            gaps: gap
+        )
+
+        #expect(zero?.id == fixture.topWindow.id)
+        #expect(fixture.column.activeTileIdx == 2)
+
+        let beyondEnd = fixture.engine.focusWindowInColumn(
+            99,
+            currentSelection: fixture.middleWindow,
+            in: fixture.workspaceId,
+            motion: motion,
+            state: &state,
+            workingFrame: workingFrame,
+            gaps: gap
+        )
+
+        #expect(beyondEnd?.id == fixture.bottomWindow.id)
+        #expect(fixture.column.activeTileIdx == 0)
+        #expect(fixture.column.activeVisualTileIdx == 2)
+        #expect(!fixture.bottomWindow.isHiddenInTabbedMode)
+        #expect(fixture.topWindow.isHiddenInTabbedMode)
+    }
+
+    @Test @MainActor func focusWindowTopBottomAndWrapUseVisualOrder() async {
+        let fixture = await makeSingleColumnFocusFixture(displayMode: .normal)
+        let workingFrame = fixture.controller.insetWorkingFrame(for: fixture.monitor)
+        let gap = CGFloat(fixture.controller.workspaceManager.gaps)
+        let motion = fixture.controller.motionPolicy.snapshot()
+        var state = fixture.controller.workspaceManager.niriViewportState(for: fixture.workspaceId)
+
+        let top = fixture.engine.focusWindowTop(
+            currentSelection: fixture.middleWindow,
+            in: fixture.workspaceId,
+            motion: motion,
+            state: &state,
+            workingFrame: workingFrame,
+            gaps: gap
+        )
+        #expect(top?.id == fixture.topWindow.id)
+        #expect(fixture.column.activeTileIdx == 2)
+
+        let bottom = fixture.engine.focusWindowBottom(
+            currentSelection: fixture.middleWindow,
+            in: fixture.workspaceId,
+            motion: motion,
+            state: &state,
+            workingFrame: workingFrame,
+            gaps: gap
+        )
+        #expect(bottom?.id == fixture.bottomWindow.id)
+        #expect(fixture.column.activeTileIdx == 0)
+
+        let down = fixture.engine.focusWindowDownOrTop(
+            currentSelection: fixture.middleWindow,
+            in: fixture.workspaceId,
+            motion: motion,
+            state: &state,
+            workingFrame: workingFrame,
+            gaps: gap
+        )
+        #expect(down?.id == fixture.bottomWindow.id)
+        #expect(fixture.column.activeTileIdx == 0)
+
+        let downWrapped = fixture.engine.focusWindowDownOrTop(
+            currentSelection: fixture.bottomWindow,
+            in: fixture.workspaceId,
+            motion: motion,
+            state: &state,
+            workingFrame: workingFrame,
+            gaps: gap
+        )
+        #expect(downWrapped?.id == fixture.topWindow.id)
+        #expect(fixture.column.activeTileIdx == 2)
+
+        let up = fixture.engine.focusWindowUpOrBottom(
+            currentSelection: fixture.middleWindow,
+            in: fixture.workspaceId,
+            motion: motion,
+            state: &state,
+            workingFrame: workingFrame,
+            gaps: gap
+        )
+        #expect(up?.id == fixture.topWindow.id)
+        #expect(fixture.column.activeTileIdx == 2)
+
+        let upWrapped = fixture.engine.focusWindowUpOrBottom(
+            currentSelection: fixture.topWindow,
+            in: fixture.workspaceId,
+            motion: motion,
+            state: &state,
+            workingFrame: workingFrame,
+            gaps: gap
+        )
+        #expect(upWrapped?.id == fixture.bottomWindow.id)
+        #expect(fixture.column.activeTileIdx == 0)
+    }
+
     @Test @MainActor func selectTabInNiriMapsVisualOverlayIndicesBackToStorageOrder() async {
         let fixture = await makeSingleColumnFocusFixture(displayMode: .tabbed)
 

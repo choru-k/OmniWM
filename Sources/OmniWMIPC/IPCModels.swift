@@ -217,6 +217,11 @@ public enum IPCCommandName: String, Codable, CaseIterable, Equatable, Sendable {
     case focusPrevious = "focus-previous"
     case focusDownOrLeft = "focus-down-or-left"
     case focusUpOrRight = "focus-up-or-right"
+    case focusWindowInColumn = "focus-window-in-column"
+    case focusWindowTop = "focus-window-top"
+    case focusWindowBottom = "focus-window-bottom"
+    case focusWindowDownOrTop = "focus-window-down-or-top"
+    case focusWindowUpOrBottom = "focus-window-up-or-bottom"
     case focusColumn = "focus-column"
     case focusColumnFirst = "focus-column-first"
     case focusColumnLast = "focus-column-last"
@@ -326,6 +331,11 @@ public enum IPCCommandRequest: Equatable, Sendable {
     case focusPrevious
     case focusDownOrLeft
     case focusUpOrRight
+    case focusWindowInColumn(windowIndex: Int)
+    case focusWindowTop
+    case focusWindowBottom
+    case focusWindowDownOrTop
+    case focusWindowUpOrBottom
     case focusColumn(columnIndex: Int)
     case focusColumnFirst
     case focusColumnLast
@@ -393,6 +403,16 @@ public enum IPCCommandRequest: Equatable, Sendable {
             .focusDownOrLeft
         case .focusUpOrRight:
             .focusUpOrRight
+        case .focusWindowInColumn:
+            .focusWindowInColumn
+        case .focusWindowTop:
+            .focusWindowTop
+        case .focusWindowBottom:
+            .focusWindowBottom
+        case .focusWindowDownOrTop:
+            .focusWindowDownOrTop
+        case .focusWindowUpOrBottom:
+            .focusWindowUpOrBottom
         case .focusColumn:
             .focusColumn
         case .focusColumnFirst:
@@ -575,6 +595,20 @@ public enum IPCCommandRequest: Equatable, Sendable {
         case .focusUpOrRight:
             try requireNoArguments()
             self = .focusUpOrRight
+        case .focusWindowInColumn:
+            self = .focusWindowInColumn(windowIndex: try requireInteger())
+        case .focusWindowTop:
+            try requireNoArguments()
+            self = .focusWindowTop
+        case .focusWindowBottom:
+            try requireNoArguments()
+            self = .focusWindowBottom
+        case .focusWindowDownOrTop:
+            try requireNoArguments()
+            self = .focusWindowDownOrTop
+        case .focusWindowUpOrBottom:
+            try requireNoArguments()
+            self = .focusWindowUpOrBottom
         case .focusColumn:
             self = .focusColumn(columnIndex: try requireInteger())
         case .focusColumnFirst:
@@ -755,6 +789,10 @@ extension IPCCommandRequest: Codable {
         let columnIndex: Int
     }
 
+    private struct IPCWindowIndexArguments: Codable, Equatable, Sendable {
+        let windowIndex: Int
+    }
+
     private struct IPCWorkspaceOnMonitorArguments: Codable, Equatable, Sendable {
         let workspaceNumber: Int
         let direction: IPCDirection
@@ -787,6 +825,17 @@ extension IPCCommandRequest: Codable {
             self = .focusDownOrLeft
         case .focusUpOrRight:
             self = .focusUpOrRight
+        case .focusWindowInColumn:
+            let arguments = try container.decode(IPCWindowIndexArguments.self, forKey: .arguments)
+            self = .focusWindowInColumn(windowIndex: arguments.windowIndex)
+        case .focusWindowTop:
+            self = .focusWindowTop
+        case .focusWindowBottom:
+            self = .focusWindowBottom
+        case .focusWindowDownOrTop:
+            self = .focusWindowDownOrTop
+        case .focusWindowUpOrBottom:
+            self = .focusWindowUpOrBottom
         case .focusColumn:
             let arguments = try container.decode(IPCColumnIndexArguments.self, forKey: .arguments)
             self = .focusColumn(columnIndex: arguments.columnIndex)
@@ -929,6 +978,16 @@ extension IPCCommandRequest: Codable {
         case .focusDownOrLeft:
             break
         case .focusUpOrRight:
+            break
+        case let .focusWindowInColumn(windowIndex):
+            try container.encode(IPCWindowIndexArguments(windowIndex: windowIndex), forKey: .arguments)
+        case .focusWindowTop:
+            break
+        case .focusWindowBottom:
+            break
+        case .focusWindowDownOrTop:
+            break
+        case .focusWindowUpOrBottom:
             break
         case let .focusColumn(columnIndex):
             try container.encode(IPCColumnIndexArguments(columnIndex: columnIndex), forKey: .arguments)
