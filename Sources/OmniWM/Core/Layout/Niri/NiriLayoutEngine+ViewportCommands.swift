@@ -17,16 +17,21 @@ extension NiriLayoutEngine {
 
         cancelInteractiveResize(for: columns[activeIndex], in: workspaceId)
 
+        let scale = displayScale(in: workspaceId)
+        let viewFrame = monitorForWorkspace(workspaceId)?.frame
         let targetOffset = state.computeCenteredOffset(
             columnIndex: activeIndex,
             columns: columns,
             gap: gaps,
-            viewportWidth: workingFrame.width
+            viewportWidth: workingFrame.width,
+            workingArea: workingFrame,
+            viewFrame: viewFrame,
+            scale: scale
         )
         state.animateToOffset(
             targetOffset,
             motion: motion,
-            scale: displayScale(in: workspaceId)
+            scale: scale
         )
         return true
     }
@@ -52,8 +57,17 @@ extension NiriLayoutEngine {
         let activeIndex = state.activeColumnIndex.clamped(to: 0 ... (columns.count - 1))
         state.activeColumnIndex = activeIndex
 
+        let scale = displayScale(in: workspaceId)
+        let viewFrame = monitorForWorkspace(workspaceId)?.frame
+        let areas = state.normalizedFittingAreas(
+            viewportSpan: workingFrame.width,
+            workingArea: workingFrame,
+            viewFrame: viewFrame,
+            scale: scale
+        )
         let viewStart = state.targetViewPosPixels(columns: columns, gap: gaps)
-        let viewportWidth = workingFrame.width
+        let workingStart = areas.origin(of: areas.working)
+        let viewportWidth = areas.span(of: areas.working)
 
         var widthTaken: CGFloat = 0
         var leftmostColumnX: CGFloat?
@@ -61,7 +75,7 @@ extension NiriLayoutEngine {
 
         for (idx, column) in columns.enumerated() {
             let columnX = state.columnX(at: idx, columns: columns, gap: gaps)
-            if columnX < viewStart + gaps {
+            if columnX < viewStart + workingStart + gaps {
                 continue
             }
 
@@ -70,7 +84,7 @@ extension NiriLayoutEngine {
             }
 
             let width = column.cachedWidth
-            if viewStart + viewportWidth < columnX + width + gaps {
+            if viewStart + workingStart + viewportWidth < columnX + width + gaps {
                 break
             }
 
@@ -86,9 +100,8 @@ extension NiriLayoutEngine {
         cancelInteractiveResize(for: columns[activeIndex], in: workspaceId)
 
         let freeSpace = viewportWidth - widthTaken + gaps
-        let newViewStart = leftmostColumnX - freeSpace / 2
+        let newViewStart = leftmostColumnX - freeSpace / 2 - workingStart
         let targetOffset = newViewStart - activeColumnX
-        let scale = displayScale(in: workspaceId)
 
         state.animateToOffset(
             targetOffset,
@@ -105,7 +118,9 @@ extension NiriLayoutEngine {
             sizeKeyPath: \.cachedWidth,
             centerMode: settings.centerFocusedColumn,
             alwaysCenterSingleColumn: settings.alwaysCenterSingleColumn,
-            scale: scale
+            scale: scale,
+            workingArea: workingFrame,
+            viewFrame: viewFrame
         )
 
         return true

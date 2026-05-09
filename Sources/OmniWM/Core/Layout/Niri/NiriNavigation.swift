@@ -199,6 +199,7 @@ extension NiriLayoutEngine {
         }
 
         let scale = displayScale(in: workspaceId)
+        let viewFrame = monitorForWorkspace(workspaceId)?.frame
         let oldActivePos = previousActiveContainerPosition
             ?? state.containerPosition(
                 at: state.activeColumnIndex,
@@ -227,7 +228,10 @@ extension NiriLayoutEngine {
             alwaysCenterSingleColumn: settings.alwaysCenterSingleColumn,
             animationConfig: animationConfig,
             fromContainerIndex: prevIdx,
-            scale: scale
+            scale: scale,
+            workingArea: workingFrame,
+            viewFrame: viewFrame,
+            orientation: orientation
         )
 
         state.selectionProgress = 0.0

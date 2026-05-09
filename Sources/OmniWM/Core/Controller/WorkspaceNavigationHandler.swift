@@ -820,12 +820,13 @@ final class WorkspaceNavigationHandler {
             {
                 targetState.selectedNodeId = movedNode.id
                 let gap = CGFloat(controller.workspaceManager.gaps)
+                let workingFrame = controller.insetWorkingFrame(for: monitor)
                 engine.ensureSelectionVisible(
                     node: movedNode,
                     in: target.id,
                     motion: controller.motionPolicy.snapshot(),
                     state: &targetState,
-                    workingFrame: monitor.visibleFrame,
+                    workingFrame: workingFrame,
                     gaps: gap
                 )
             }
@@ -935,12 +936,13 @@ final class WorkspaceNavigationHandler {
                 targetState.selectedNodeId = movedNode.id
 
                 let gap = CGFloat(controller.workspaceManager.gaps)
+                let workingFrame = controller.insetWorkingFrame(for: monitor)
                 engine.ensureSelectionVisible(
                     node: movedNode,
                     in: targetWsId,
                     motion: controller.motionPolicy.snapshot(),
                     state: &targetState,
-                    workingFrame: monitor.visibleFrame,
+                    workingFrame: workingFrame,
                     gaps: gap
                 )
             }

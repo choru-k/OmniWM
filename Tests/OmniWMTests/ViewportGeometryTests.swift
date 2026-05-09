@@ -3,16 +3,116 @@ import Testing
 
 @testable import OmniWM
 
-private func makeViewportGestureContainers(widths: [CGFloat]) -> [NiriContainer] {
-    widths.map { width in
+private func makeViewportGestureContainers(
+    widths: [CGFloat],
+    modes: [SizingMode]? = nil
+) -> [NiriContainer] {
+    widths.enumerated().map { index, width in
         let container = NiriContainer()
         container.cachedWidth = width
         container.cachedHeight = width
+        let window = NiriWindow(token: makeTestHandle(pid: pid_t(10_000 + index)).id)
+        if let modes, modes.indices.contains(index) {
+            window.sizingMode = modes[index]
+        }
+        container.appendChild(window)
         return container
     }
 }
 
 @Suite struct ViewportGeometryTests {
+    @Test func visibleOffsetUsesModeAwareAreasForNormalMaximizedAndFullscreen() {
+        let state = ViewportState()
+        let workingArea = CGRect(x: 0, y: 0, width: 1_000, height: 800)
+        let parentArea = CGRect(x: 0, y: 0, width: 1_200, height: 800)
+        let gap: CGFloat = 10
+
+        let normal = makeViewportGestureContainers(widths: [600], modes: [.normal])
+        let maximized = makeViewportGestureContainers(widths: [600], modes: [.maximized])
+        let fullscreen = makeViewportGestureContainers(widths: [600], modes: [.fullscreen])
+
+        let normalOffset = state.computeVisibleOffset(
+            containerIndex: 0,
+            containers: normal,
+            gap: gap,
+            viewportSpan: workingArea.width,
+            sizeKeyPath: \.cachedWidth,
+            currentViewStart: 0,
+            centerMode: .never,
+            workingArea: workingArea,
+            viewFrame: parentArea
+        )
+        let maximizedOffset = state.computeVisibleOffset(
+            containerIndex: 0,
+            containers: maximized,
+            gap: gap,
+            viewportSpan: workingArea.width,
+            sizeKeyPath: \.cachedWidth,
+            currentViewStart: 0,
+            centerMode: .never,
+            workingArea: workingArea,
+            viewFrame: parentArea
+        )
+        let fullscreenOffset = state.computeVisibleOffset(
+            containerIndex: 0,
+            containers: fullscreen,
+            gap: gap,
+            viewportSpan: workingArea.width,
+            sizeKeyPath: \.cachedWidth,
+            currentViewStart: 700,
+            centerMode: .never,
+            workingArea: workingArea,
+            viewFrame: parentArea
+        )
+
+        #expect(abs(normalOffset + gap) < 0.001)
+        #expect(abs(maximizedOffset) < 0.001)
+        #expect(abs(fullscreenOffset) < 0.001)
+    }
+
+    @Test func centeredOffsetUsesModeAwareAreaAndFullscreenAnchor() {
+        let state = ViewportState()
+        let workingArea = CGRect(x: 0, y: 0, width: 1_000, height: 800)
+        let parentArea = CGRect(x: 0, y: 0, width: 1_200, height: 800)
+        let gap: CGFloat = 10
+
+        let normal = makeViewportGestureContainers(widths: [600], modes: [.normal])
+        let maximized = makeViewportGestureContainers(widths: [600], modes: [.maximized])
+        let fullscreen = makeViewportGestureContainers(widths: [600], modes: [.fullscreen])
+
+        let normalOffset = state.computeCenteredOffset(
+            containerIndex: 0,
+            containers: normal,
+            gap: gap,
+            viewportSpan: workingArea.width,
+            sizeKeyPath: \.cachedWidth,
+            workingArea: workingArea,
+            viewFrame: parentArea
+        )
+        let maximizedOffset = state.computeCenteredOffset(
+            containerIndex: 0,
+            containers: maximized,
+            gap: gap,
+            viewportSpan: workingArea.width,
+            sizeKeyPath: \.cachedWidth,
+            workingArea: workingArea,
+            viewFrame: parentArea
+        )
+        let fullscreenOffset = state.computeCenteredOffset(
+            containerIndex: 0,
+            containers: fullscreen,
+            gap: gap,
+            viewportSpan: workingArea.width,
+            sizeKeyPath: \.cachedWidth,
+            workingArea: workingArea,
+            viewFrame: parentArea
+        )
+
+        #expect(abs(normalOffset + 200) < 0.001)
+        #expect(abs(maximizedOffset + 300) < 0.001)
+        #expect(abs(fullscreenOffset) < 0.001)
+    }
+
     @Test func updateGestureDoesNotClampOrAdvanceSelectionDuringSwipe() {
         var state = ViewportState()
         state.activeColumnIndex = 1

@@ -2073,6 +2073,59 @@ private func makeCenteredCrossMonitorFixture(
         #expect(abs(state.viewOffsetPixels.target() + 600) < 0.001)
     }
 
+    @Test func centerColumnUsesParentAreaForMaximizedAndAnchorsFullscreen() {
+        let engine = NiriLayoutEngine(maxWindowsPerColumn: 1, maxVisibleColumns: 1)
+        let workspaceId = UUID()
+        let window = engine.addWindow(
+            handle: makeTestHandle(pid: 2_044),
+            to: workspaceId,
+            afterSelection: nil
+        )
+        let column = engine.columns(in: workspaceId)[0]
+        column.width = .fixed(600)
+        column.cachedWidth = 600
+
+        let displayId = CGDirectDisplayID(20_044)
+        let monitor = Monitor(
+            id: Monitor.ID(displayId: displayId),
+            displayId: displayId,
+            frame: CGRect(x: 0, y: 0, width: 1_200, height: 800),
+            visibleFrame: CGRect(x: 0, y: 0, width: 1_000, height: 800),
+            hasNotch: false,
+            name: "Viewport fitting"
+        )
+        engine.moveWorkspace(workspaceId, to: monitor.id, monitor: monitor)
+
+        var state = ViewportState()
+        state.activeColumnIndex = 0
+        state.selectedNodeId = window.id
+
+        window.sizingMode = .maximized
+        let maximizedChanged = engine.centerColumn(
+            in: workspaceId,
+            motion: .disabled,
+            state: &state,
+            workingFrame: monitor.visibleFrame,
+            gaps: 10
+        )
+
+        #expect(maximizedChanged)
+        #expect(abs(state.viewOffsetPixels.target() + 300) < 0.001)
+
+        window.sizingMode = .fullscreen
+        state.viewOffsetPixels = .static(-123)
+        let fullscreenChanged = engine.centerColumn(
+            in: workspaceId,
+            motion: .disabled,
+            state: &state,
+            workingFrame: monitor.visibleFrame,
+            gaps: 10
+        )
+
+        #expect(fullscreenChanged)
+        #expect(abs(state.viewOffsetPixels.target()) < 0.001)
+    }
+
     @Test func centerVisibleColumnsCentersFullyVisibleSetAroundActiveColumn() {
         let fixture = makeVisibleColumnFixture(visibleCount: 3, extraColumns: 1)
         let columns = fixture.engine.columns(in: fixture.workspaceId)
@@ -2093,6 +2146,47 @@ private func makeCenteredCrossMonitorFixture(
         #expect(changed)
         #expect(state.activeColumnIndex == 1)
         #expect(abs(state.viewOffsetPixels.target() + 396) < 0.001)
+    }
+
+    @Test func centerVisibleColumnsUsesWorkingAreaOriginWhenFittingVisibleSet() {
+        let engine = NiriLayoutEngine(maxWindowsPerColumn: 1, maxVisibleColumns: 3)
+        let workspaceId = UUID()
+        var previousSelection: NodeId?
+        for index in 0 ..< 4 {
+            let window = engine.addWindow(
+                handle: makeTestHandle(pid: pid_t(2_060 + index)),
+                to: workspaceId,
+                afterSelection: previousSelection
+            )
+            previousSelection = window.id
+        }
+
+        let displayId = CGDirectDisplayID(20_060)
+        let monitor = Monitor(
+            id: Monitor.ID(displayId: displayId),
+            displayId: displayId,
+            frame: CGRect(x: 0, y: 0, width: 1_200, height: 800),
+            visibleFrame: CGRect(x: 100, y: 0, width: 1_000, height: 800),
+            hasNotch: false,
+            name: "Inset viewport fitting"
+        )
+        engine.moveWorkspace(workspaceId, to: monitor.id, monitor: monitor)
+        assignWidths(engine.columns(in: workspaceId), widths: Array(repeating: 250, count: 4))
+
+        var state = ViewportState()
+        state.activeColumnIndex = 1
+        state.viewOffsetPixels = .static(-360)
+
+        let changed = engine.centerVisibleColumns(
+            in: workspaceId,
+            motion: .disabled,
+            state: &state,
+            workingFrame: monitor.visibleFrame,
+            gaps: 10
+        )
+
+        #expect(changed)
+        #expect(abs(state.viewOffsetPixels.target() + 345) < 0.001)
     }
 
     @Test func centerVisibleColumnsNoOpsWhenFocusedColumnIsAlwaysCentered() {

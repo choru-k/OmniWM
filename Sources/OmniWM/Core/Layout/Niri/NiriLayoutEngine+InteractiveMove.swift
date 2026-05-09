@@ -45,7 +45,10 @@ extension NiriLayoutEngine {
             motion: motion,
             animate: false,
             centerMode: settings.centerFocusedColumn,
-            alwaysCenterSingleColumn: settings.alwaysCenterSingleColumn
+            alwaysCenterSingleColumn: settings.alwaysCenterSingleColumn,
+            scale: displayScale(in: workspaceId),
+            workingArea: workingFrame,
+            viewFrame: monitorForWorkspace(workspaceId)?.frame
         )
 
         return true

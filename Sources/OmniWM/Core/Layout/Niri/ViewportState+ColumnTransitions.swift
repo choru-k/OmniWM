@@ -8,7 +8,10 @@ extension ViewportState {
         gap: CGFloat,
         viewportWidth: CGFloat,
         motion: MotionSnapshot,
-        animate: Bool = false
+        animate: Bool = false,
+        workingArea: CGRect? = nil,
+        viewFrame: CGRect? = nil,
+        scale: CGFloat = 2.0
     ) {
         guard !columns.isEmpty else { return }
         let clampedIndex = index.clamped(to: 0 ... (columns.count - 1))
@@ -23,7 +26,10 @@ extension ViewportState {
             columnIndex: clampedIndex,
             columns: columns,
             gap: gap,
-            viewportWidth: viewportWidth
+            viewportWidth: viewportWidth,
+            workingArea: workingArea,
+            viewFrame: viewFrame,
+            scale: scale
         )
 
         if animate {
@@ -47,7 +53,9 @@ extension ViewportState {
         centerMode: CenterFocusedColumn,
         alwaysCenterSingleColumn: Bool = false,
         fromColumnIndex: Int? = nil,
-        scale: CGFloat = 2.0
+        scale: CGFloat = 2.0,
+        workingArea: CGRect? = nil,
+        viewFrame: CGRect? = nil
     ) {
         guard !columns.isEmpty else { return }
         let clampedIndex = newIndex.clamped(to: 0 ... (columns.count - 1))
@@ -71,7 +79,9 @@ extension ViewportState {
             centerMode: centerMode,
             alwaysCenterSingleColumn: alwaysCenterSingleColumn,
             fromColumnIndex: fromColumnIndex ?? prevActiveColumn,
-            scale: scale
+            scale: scale,
+            workingArea: workingArea,
+            viewFrame: viewFrame
         )
 
         let pixel: CGFloat = 1.0 / max(scale, 1.0)
@@ -105,7 +115,10 @@ extension ViewportState {
         alwaysCenterSingleColumn: Bool = false,
         animationConfig: SpringConfig? = nil,
         fromContainerIndex: Int? = nil,
-        scale: CGFloat = 2.0
+        scale: CGFloat = 2.0,
+        workingArea: CGRect? = nil,
+        viewFrame: CGRect? = nil,
+        orientation: Monitor.Orientation = .horizontal
     ) {
         guard !containers.isEmpty, containerIndex >= 0, containerIndex < containers.count else { return }
 
@@ -124,7 +137,10 @@ extension ViewportState {
             centerMode: centerMode,
             alwaysCenterSingleColumn: alwaysCenterSingleColumn,
             fromContainerIndex: fromContainerIndex,
-            scale: scale
+            scale: scale,
+            workingArea: workingArea,
+            viewFrame: viewFrame,
+            orientation: orientation
         )
 
         if abs(targetOffset - stationaryOffset) <= pixelEpsilon {

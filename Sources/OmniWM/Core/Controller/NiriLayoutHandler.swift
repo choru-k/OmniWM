@@ -596,7 +596,10 @@ enum NiriWindowMoveResult {
                         motion: motion,
                         animate: false,
                         centerMode: settings.centerFocusedColumn,
-                        alwaysCenterSingleColumn: settings.alwaysCenterSingleColumn
+                        alwaysCenterSingleColumn: settings.alwaysCenterSingleColumn,
+                        scale: pass.engine.displayScale(in: pass.wsId),
+                        workingArea: pass.insetFrame,
+                        viewFrame: pass.monitor.frame
                     )
                 }
             } else if let newCol = pass.engine.column(of: newNode),

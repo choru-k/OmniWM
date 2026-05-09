@@ -100,10 +100,11 @@ extension ViewportState {
 
         let activeColX = columnX(at: activeColumnIndex, columns: columns, gap: gap)
         let projectedViewPos = Double(activeColX) + projectedOffset
-        let areas = normalizedGestureAreas(
-            viewportWidth: viewportWidth,
+        let areas = normalizedFittingAreas(
+            viewportSpan: viewportWidth,
             workingArea: workingArea,
             viewFrame: viewFrame,
+            orientation: .horizontal,
             scale: scale
         )
 
@@ -168,13 +169,6 @@ extension ViewportState {
         let columnIndex: Int
     }
 
-    private struct GestureAreas {
-        let working: CGRect
-        let parent: CGRect
-        let viewWidth: Double
-        let scale: CGFloat
-    }
-
     private struct SnapPoint {
         let viewPos: Double
         let columnIndex: Int
@@ -191,14 +185,14 @@ extension ViewportState {
         currentOffset: Double,
         columns: [NiriContainer],
         gap: CGFloat,
-        areas: GestureAreas,
+        areas: ViewportFittingAreas,
         centerMode: CenterFocusedColumn,
         alwaysCenterSingleColumn: Bool = false
     ) -> SnapResult {
         guard !columns.isEmpty else { return SnapResult(viewPos: 0, columnIndex: 0) }
 
         let isCentering = centerMode == .always || (alwaysCenterSingleColumn && columns.count <= 1)
-        let viewWidth = areas.viewWidth
+        let viewWidth = Double(areas.viewSpan)
         let gaps = Double(gap)
         var snapPoints: [SnapPoint] = []
 
@@ -206,17 +200,18 @@ extension ViewportState {
             var colX = 0.0
             for (idx, col) in columns.enumerated() {
                 let colW = Double(col.cachedWidth)
-                let mode = sizingMode(for: col)
-                let area = area(for: mode, areas: areas)
-                let leftStrut = Double(area.minX)
+                let mode = col.effectiveSizingMode
+                let area = areas.area(for: mode)
+                let areaWidth = Double(areas.span(of: area))
+                let leftStrut = Double(areas.origin(of: area))
 
                 let viewPos: Double
                 if mode.isFullscreen {
                     viewPos = colX
-                } else if Double(area.width) <= colW {
+                } else if areaWidth <= colW {
                     viewPos = colX - leftStrut
                 } else {
-                    viewPos = colX - (Double(area.width) - colW) / 2.0 - leftStrut
+                    viewPos = colX - (areaWidth - colW) / 2.0 - leftStrut
                 }
                 appendSnapPoint(viewPos, idx, to: &snapPoints)
 
@@ -232,15 +227,15 @@ extension ViewportState {
                 nextColWidth: Double?
             ) -> (left: Double, right: Double) {
                 let colW = Double(column.cachedWidth)
-                let mode = sizingMode(for: column)
+                let mode = column.effectiveSizingMode
 
                 if mode.isFullscreen {
                     return (colX, colX + colW)
                 }
 
-                let area = area(for: mode, areas: areas)
-                let areaWidth = Double(area.width)
-                let leftStrut = Double(area.minX)
+                let area = areas.area(for: mode)
+                let areaWidth = Double(areas.span(of: area))
+                let leftStrut = Double(areas.origin(of: area))
                 let rightStrut = viewWidth - areaWidth - leftStrut
                 let padding = mode.isMaximized ? 0 : ((areaWidth - colW) / 2.0).clamped(to: 0 ... gaps)
                 let center = if areaWidth <= colW {
@@ -318,16 +313,18 @@ extension ViewportState {
                 for idx in (newColIdx + 1) ..< columns.count {
                     let colX = Double(columnX(at: idx, columns: columns, gap: gap))
                     let colW = Double(columns[idx].cachedWidth)
-                    let mode = sizingMode(for: columns[idx])
-                    let area = area(for: mode, areas: areas)
+                    let mode = columns[idx].effectiveSizingMode
+                    let area = areas.area(for: mode)
 
                     if mode.isFullscreen {
                         if closest.viewPos + viewWidth < colX + colW {
                             break
                         }
                     } else {
-                        let padding = mode.isMaximized ? 0 : ((Double(area.width) - colW) / 2.0).clamped(to: 0 ... gaps)
-                        if closest.viewPos + Double(area.minX) + Double(area.width) < colX + colW + padding {
+                        let areaWidth = Double(areas.span(of: area))
+                        let leftStrut = Double(areas.origin(of: area))
+                        let padding = mode.isMaximized ? 0 : ((areaWidth - colW) / 2.0).clamped(to: 0 ... gaps)
+                        if closest.viewPos + leftStrut + areaWidth < colX + colW + padding {
                             break
                         }
                     }
@@ -338,16 +335,18 @@ extension ViewportState {
                 for idx in stride(from: newColIdx - 1, through: 0, by: -1) {
                     let colX = Double(columnX(at: idx, columns: columns, gap: gap))
                     let colW = Double(columns[idx].cachedWidth)
-                    let mode = sizingMode(for: columns[idx])
-                    let area = area(for: mode, areas: areas)
+                    let mode = columns[idx].effectiveSizingMode
+                    let area = areas.area(for: mode)
 
                     if mode.isFullscreen {
                         if colX < closest.viewPos {
                             break
                         }
                     } else {
-                        let padding = mode.isMaximized ? 0 : ((Double(area.width) - colW) / 2.0).clamped(to: 0 ... gaps)
-                        if colX - padding < closest.viewPos + Double(area.minX) {
+                        let areaWidth = Double(areas.span(of: area))
+                        let leftStrut = Double(areas.origin(of: area))
+                        let padding = mode.isMaximized ? 0 : ((areaWidth - colW) / 2.0).clamped(to: 0 ... gaps)
+                        if colX - padding < closest.viewPos + leftStrut {
                             break
                         }
                     }
@@ -365,179 +364,36 @@ extension ViewportState {
         columnIndex: Int,
         columns: [NiriContainer],
         gap: CGFloat,
-        areas: GestureAreas,
+        areas: ViewportFittingAreas,
         centerMode: CenterFocusedColumn,
         alwaysCenterSingleColumn: Bool
     ) -> Double {
         guard columns.indices.contains(columnIndex) else { return 0 }
         let colX = Double(columnX(at: columnIndex, columns: columns, gap: gap))
         let colW = Double(columns[columnIndex].cachedWidth)
-        let mode = sizingMode(for: columns[columnIndex])
+        let mode = columns[columnIndex].effectiveSizingMode
         let isCentering = centerMode == .always || (alwaysCenterSingleColumn && columns.count <= 1)
 
-        if isCentering {
-            return computeNewViewOffsetCentered(
-                targetViewPos: targetViewPos,
-                colX: colX,
-                colW: colW,
+        let offset = if isCentering {
+            computeModeAwareCenteredOffset(
+                currentViewStart: CGFloat(targetViewPos),
+                targetPos: CGFloat(colX),
+                targetSpan: CGFloat(colW),
+                mode: mode,
+                areas: areas,
+                gap: gap
+            )
+        } else {
+            computeModeAwareFitOffset(
+                currentViewStart: CGFloat(targetViewPos),
+                targetPos: CGFloat(colX),
+                targetSpan: CGFloat(colW),
                 mode: mode,
                 areas: areas,
                 gap: gap
             )
         }
-
-        return computeNewViewOffsetFit(
-            targetViewPos: targetViewPos,
-            colX: colX,
-            colW: colW,
-            mode: mode,
-            areas: areas,
-            gap: gap
-        )
-    }
-
-    private func computeNewViewOffsetCentered(
-        targetViewPos: Double,
-        colX: Double,
-        colW: Double,
-        mode: SizingMode,
-        areas: GestureAreas,
-        gap: CGFloat
-    ) -> Double {
-        if mode.isFullscreen {
-            return computeNewViewOffsetFit(
-                targetViewPos: targetViewPos,
-                colX: colX,
-                colW: colW,
-                mode: mode,
-                areas: areas,
-                gap: gap
-            )
-        }
-
-        let area = area(for: mode, areas: areas)
-        let areaWidth = Double(area.width)
-        let leftStrut = Double(area.minX)
-        if areaWidth <= colW {
-            return computeNewViewOffsetFit(
-                targetViewPos: targetViewPos,
-                colX: colX,
-                colW: colW,
-                mode: mode,
-                areas: areas,
-                gap: gap
-            )
-        }
-
-        return -(areaWidth - colW) / 2.0 - leftStrut
-    }
-
-    private func computeNewViewOffsetFit(
-        targetViewPos: Double,
-        colX: Double,
-        colW: Double,
-        mode: SizingMode,
-        areas: GestureAreas,
-        gap: CGFloat
-    ) -> Double {
-        if mode.isFullscreen {
-            return 0
-        }
-
-        let area = area(for: mode, areas: areas)
-        let padding = mode.isMaximized ? 0 : Double(gap)
-        let newOffset = computeNewViewOffset(
-            currentX: targetViewPos + Double(area.minX),
-            viewWidth: Double(area.width),
-            newColumnX: colX,
-            newColumnWidth: colW,
-            gaps: padding
-        )
-        return newOffset - Double(area.minX)
-    }
-
-    private func computeNewViewOffset(
-        currentX: Double,
-        viewWidth: Double,
-        newColumnX: Double,
-        newColumnWidth: Double,
-        gaps: Double
-    ) -> Double {
-        if viewWidth <= newColumnWidth {
-            return 0
-        }
-
-        let padding = ((viewWidth - newColumnWidth) / 2.0).clamped(to: 0 ... gaps)
-        let newX = newColumnX - padding
-        let newRightX = newColumnX + newColumnWidth + padding
-
-        if currentX <= newX, newRightX <= currentX + viewWidth {
-            return -(newColumnX - currentX)
-        }
-
-        let distToLeft = abs(currentX - newX)
-        let distToRight = abs((currentX + viewWidth) - newRightX)
-        if distToLeft <= distToRight {
-            return -padding
-        } else {
-            return -(viewWidth - padding - newColumnWidth)
-        }
-    }
-
-    private func normalizedGestureAreas(
-        viewportWidth: CGFloat,
-        workingArea: CGRect?,
-        viewFrame: CGRect?,
-        scale: CGFloat
-    ) -> GestureAreas {
-        let parentFrame = viewFrame ?? CGRect(x: 0, y: 0, width: viewportWidth, height: 0)
-        let parent = CGRect(origin: .zero, size: parentFrame.size)
-
-        let working: CGRect
-        if let workingArea {
-            working = CGRect(
-                x: workingArea.minX - parentFrame.minX,
-                y: workingArea.minY - parentFrame.minY,
-                width: workingArea.width,
-                height: workingArea.height
-            )
-        } else {
-            working = CGRect(x: 0, y: 0, width: viewportWidth, height: parentFrame.height)
-        }
-
-        return GestureAreas(
-            working: working.width > 0 ? working : CGRect(x: 0, y: 0, width: viewportWidth, height: parentFrame.height),
-            parent: parent.width > 0 ? parent : CGRect(x: 0, y: 0, width: viewportWidth, height: parentFrame.height),
-            viewWidth: Double(parent.width > 0 ? parent.width : viewportWidth),
-            scale: scale
-        )
-    }
-
-    private func area(for mode: SizingMode, areas: GestureAreas) -> CGRect {
-        mode.isMaximized ? areas.parent : areas.working
-    }
-
-    private func sizingMode(for column: NiriContainer) -> SizingMode {
-        var anyFullscreen = false
-        var anyMaximized = false
-        for window in column.windowNodes {
-            switch window.sizingMode {
-            case .normal:
-                continue
-            case .maximized:
-                anyMaximized = true
-            case .fullscreen:
-                anyFullscreen = true
-            }
-        }
-
-        if anyFullscreen {
-            return .fullscreen
-        } else if anyMaximized {
-            return .maximized
-        } else {
-            return .normal
-        }
+        return Double(offset)
     }
 
     private func appendSnapPoint(_ viewPos: Double, _ columnIndex: Int, to snapPoints: inout [SnapPoint]) {
@@ -667,15 +523,5 @@ extension ViewportState {
         activatePrevColumnOnRemoval = nil
         viewOffsetToRestore = nil
         selectionProgress = 0.0
-    }
-}
-
-private extension SizingMode {
-    var isMaximized: Bool {
-        self == .maximized
-    }
-
-    var isFullscreen: Bool {
-        self == .fullscreen
     }
 }
