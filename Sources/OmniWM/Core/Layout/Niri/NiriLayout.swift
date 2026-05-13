@@ -50,28 +50,6 @@ private struct ContainerOverflowRegion {
 }
 
 extension NiriLayoutEngine {
-    private func workspaceSwitchOffset(
-        workspaceId: WorkspaceDescriptor.ID,
-        monitorFrame: CGRect,
-        time: TimeInterval
-    ) -> CGFloat {
-        guard let monitorId = monitorContaining(workspace: workspaceId),
-              let monitor = monitors[monitorId],
-              let switch_ = monitor.workspaceSwitch,
-              let workspaceIndex = switch_.index(of: workspaceId) else {
-            return 0
-        }
-
-        let renderIndex = switch_.currentIndex(at: time)
-        let delta = Double(workspaceIndex) - renderIndex
-        if abs(delta) < 0.001 {
-            return 0
-        }
-
-        let reduceMotionScale: CGFloat = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 0.25 : 1.0
-        return CGFloat(delta) * monitorFrame.width * reduceMotionScale
-    }
-
     func calculateLayout(
         state: ViewportState,
         workspaceId: WorkspaceDescriptor.ID,
@@ -161,11 +139,7 @@ extension NiriLayoutEngine {
         }
 
         let time = animationTime ?? CACurrentMediaTime()
-        let workspaceOffset = workspaceSwitchOffset(
-            workspaceId: workspaceId,
-            monitorFrame: monitorFrame,
-            time: time
-        )
+        let workspaceOffset: CGFloat = 0
         let canonicalFullscreenRect = workingFrame.roundedToPhysicalPixels(scale: effectiveScale)
         let renderedFullscreenRect = canonicalFullscreenRect
             .offsetBy(dx: workspaceOffset, dy: 0)

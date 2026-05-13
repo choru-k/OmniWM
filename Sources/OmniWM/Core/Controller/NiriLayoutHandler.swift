@@ -85,7 +85,6 @@ enum NiriWindowMoveResult {
 
         let windowAnimationsRunning = engine.tickAllWindowAnimations(in: wsId, at: targetTime)
         let columnAnimationsRunning = engine.tickAllColumnAnimations(in: wsId, at: targetTime)
-        let workspaceSwitchRunning = engine.tickWorkspaceSwitchAnimation(for: wsId, at: targetTime)
 
         controller.workspaceManager.withNiriViewportState(for: wsId) { state in
             let viewportAnimationRunning = state.advanceAnimations(at: targetTime)
@@ -101,7 +100,6 @@ enum NiriWindowMoveResult {
             let animationsOngoing = viewportAnimationRunning
                 || windowAnimationsRunning
                 || columnAnimationsRunning
-                || workspaceSwitchRunning
 
             if !animationsOngoing {
                 self.finalizeAnimation()
@@ -1281,12 +1279,6 @@ enum NiriWindowMoveResult {
                 return (workspaceId: workspace.id, monitor: monitor)
             }
         engine.syncWorkspaceAssignments(workspaceAssignments)
-
-        for monitor in currentMonitors {
-            if let niriMonitor = engine.monitor(for: monitor.id) {
-                niriMonitor.animationClock = controller.animationClock
-            }
-        }
 
         refreshResolvedMonitorSettings()
     }

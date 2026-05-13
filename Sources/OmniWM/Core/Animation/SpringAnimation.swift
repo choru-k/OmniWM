@@ -69,13 +69,6 @@ struct SpringConfig {
         velocityEpsilon: 0.01
     )
 
-    static let niriWorkspaceSwitch = SpringConfig(
-        dampingRatio: 1.0,
-        stiffness: 1000.0,
-        epsilon: 0.0001,
-        velocityEpsilon: 0.01
-    )
-
     static let snappy = SpringConfig.niriHorizontalViewMovement
     static let balanced = SpringConfig.niriWindowMovement
     static let gentle = SpringConfig.niriWindowMovement

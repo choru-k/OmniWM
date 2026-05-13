@@ -24,14 +24,6 @@ import Testing
         #expect(abs(animation.value(at: 0.326) - 100) < 0.0001)
     }
 
-    @Test func niriWorkspaceSwitchUsesReferenceConstants() {
-        let config = SpringConfig.niriWorkspaceSwitch
-
-        #expect(config.dampingRatio == 1.0)
-        #expect(config.stiffness == 1000.0)
-        #expect(config.epsilon == 0.0001)
-    }
-
     @Test func springValueUsesNiriNumericalStabilityClamp() {
         let animation = SpringAnimation(
             from: 0,

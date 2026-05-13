@@ -1008,7 +1008,6 @@ private func syncNiriWorkspaceStatesForRefreshTests(
         #expect(lastAppliedBorderWindowId(on: controller) == previousBorderWindowId)
         #expect(lastAppliedBorderWindowId(on: controller) == targetHandle.windowId)
         #expect(controller.niriLayoutHandler.scrollAnimationByDisplay[monitor.displayId] == nil)
-        #expect(controller.niriEngine?.monitor(for: monitor.id)?.workspaceSwitch == nil)
         #expect(recorder.relayoutEvents.isEmpty)
         #expect(recorder.visibilityReasons.isEmpty)
         #expect(recorder.fullRescanReasons.isEmpty)
@@ -1032,10 +1031,9 @@ private func syncNiriWorkspaceStatesForRefreshTests(
         await waitForRefreshWork(on: fixture.controller)
 
         #expect(fixture.controller.niriLayoutHandler.scrollAnimationByDisplay[fixture.secondaryMonitor.displayId] == nil)
-        #expect(fixture.controller.niriEngine?.monitor(for: fixture.secondaryMonitor.id)?.workspaceSwitch == nil)
     }
 
-    @Test @MainActor func sameMonitorWorkspaceSwitchStartsAnimationWhenTargetWasHidden() async {
+    @Test @MainActor func sameMonitorWorkspaceSwitchSkipsAnimationWhenTargetWasHidden() async {
         let controller = makeRefreshTestController()
         guard let ws1 = controller.workspaceManager.workspaceId(for: "1", createIfMissing: false),
               let ws2 = controller.workspaceManager.workspaceId(for: "2", createIfMissing: true),
@@ -1058,8 +1056,7 @@ private func syncNiriWorkspaceStatesForRefreshTests(
         controller.workspaceNavigationHandler.switchWorkspace(index: 1)
         await waitForRefreshWork(on: controller)
 
-        #expect(controller.niriLayoutHandler.scrollAnimationByDisplay[monitor.displayId] == ws2)
-        #expect(controller.niriEngine?.monitor(for: monitor.id)?.workspaceSwitch?.toWorkspaceId == ws2)
+        #expect(controller.niriLayoutHandler.scrollAnimationByDisplay[monitor.displayId] == nil)
     }
 
     @Test @MainActor func workspaceRelativeSwitchUsesImmediateRelayoutOnly() async {
