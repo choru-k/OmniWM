@@ -4,9 +4,9 @@ import SwiftUI
 struct Sponsor: Identifiable {
     let id = UUID()
     let name: String
-    let githubUsername: String
-    let imageName: String
-    let imageExtension: String
+    let githubUsername: String?
+    let imageName: String?
+    let imageExtension: String?
 }
 
 private let sponsors: [Sponsor] = [
@@ -18,7 +18,12 @@ private let sponsors: [Sponsor] = [
     Sponsor(name: "dwstevens", githubUsername: "dwstevens", imageName: "dwstevens", imageExtension: "png"),
     Sponsor(name: "swilson2020", githubUsername: "swilson2020", imageName: "swilson2020", imageExtension: "jpg"),
     Sponsor(name: "Jeff Windsor", githubUsername: "jeffwindsor", imageName: "jeffwindsor", imageExtension: "png"),
-    Sponsor(name: "Jason Martin", githubUsername: "jsonMartin", imageName: "jsonmartin", imageExtension: "png")
+    Sponsor(name: "Jason Martin", githubUsername: "jsonMartin", imageName: "jsonmartin", imageExtension: "png"),
+    Sponsor(name: "dagi3d", githubUsername: "dagi3d", imageName: "dagi3d", imageExtension: "jpg"),
+    Sponsor(name: "Aleksei Gurianov", githubUsername: "Guria", imageName: "guria", imageExtension: "png"),
+    Sponsor(name: "Stefan Antoni", githubUsername: nil, imageName: nil, imageExtension: nil),
+    Sponsor(name: "Naoki Ikeguchi", githubUsername: "siketyan", imageName: "siketyan", imageExtension: "png"),
+    Sponsor(name: "Justin Miller", githubUsername: "incanus", imageName: "incanus", imageExtension: "png")
 ]
 
 struct SponsorsView: View {
@@ -268,95 +273,125 @@ enum SponsorTier {
 struct SponsorCardView: View {
     @Bindable var motionPolicy: MotionPolicy
     let name: String
-    let githubUsername: String
-    let imageName: String
-    let imageExtension: String
+    let githubUsername: String?
+    let imageName: String?
+    let imageExtension: String?
     let tier: SponsorTier
     let rankLabel: String
 
     @State private var isHovered = false
 
     private var githubURL: URL? {
-        URL(string: "https://github.com/\(githubUsername)")
+        guard let githubUsername else { return nil }
+        return URL(string: "https://github.com/\(githubUsername)")
     }
 
     var body: some View {
-        Button(action: {
-            if let url = githubURL {
-                NSWorkspace.shared.open(url)
+        linkedCardContent
+            .onHover { hovering in
+                isHovered = hovering
             }
-        }) {
-            VStack(spacing: 16) {
-                GlowingAvatarView(
-                    motionPolicy: motionPolicy,
-                    imageName: imageName,
-                    imageExtension: imageExtension,
-                    tier: tier
-                )
+    }
 
-                VStack(spacing: 4) {
-                    Text(name)
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(.primary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-                        .allowsTightening(true)
-
-                    HStack(spacing: 4) {
-                        Image(systemName: "link")
-                            .font(.system(size: 11))
-                        Text("@\(githubUsername)")
-                            .font(.system(size: 13))
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.8)
-                            .allowsTightening(true)
-                    }
-                    .foregroundStyle(.secondary)
-                }
-
-                Text(rankLabel)
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 4)
-                    .background(
-                        Capsule()
-                            .fill(
-                                LinearGradient(
-                                    colors: tier.gradientColors,
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
-                    )
+    @ViewBuilder private var linkedCardContent: some View {
+        if let githubURL {
+            Button(action: {
+                NSWorkspace.shared.open(githubURL)
+            }) {
+                cardContent
             }
-            .frame(maxWidth: .infinity)
-            .padding(20)
-            .background(
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(.ultraThinMaterial)
-                    .shadow(color: tier.glowColor.opacity(isHovered ? 0.3 : 0.1), radius: isHovered ? 12 : 6)
-            )
-            .scaleEffect(isHovered ? 1.02 : 1.0)
-            .animation(motionPolicy.animationsEnabled ? .easeOut(duration: 0.15) : nil, value: isHovered)
+            .buttonStyle(.plain)
+        } else {
+            cardContent
         }
-        .buttonStyle(.plain)
-        .onHover { hovering in
-            isHovered = hovering
+    }
+
+    private var cardContent: some View {
+        VStack(spacing: 16) {
+            GlowingAvatarView(
+                motionPolicy: motionPolicy,
+                imageName: imageName,
+                imageExtension: imageExtension,
+                tier: tier
+            )
+
+            VStack(spacing: 4) {
+                Text(name)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                    .allowsTightening(true)
+
+                profileLabel
+            }
+
+            Text(rankLabel)
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 4)
+                .background(
+                    Capsule()
+                        .fill(
+                            LinearGradient(
+                                colors: tier.gradientColors,
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                )
+        }
+        .frame(maxWidth: .infinity)
+        .padding(20)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(.ultraThinMaterial)
+                .shadow(color: tier.glowColor.opacity(isHovered ? 0.3 : 0.1), radius: isHovered ? 12 : 6)
+        )
+        .scaleEffect(isHovered ? 1.02 : 1.0)
+        .animation(motionPolicy.animationsEnabled ? .easeOut(duration: 0.15) : nil, value: isHovered)
+    }
+
+    @ViewBuilder private var profileLabel: some View {
+        if let githubUsername {
+            HStack(spacing: 4) {
+                Image(systemName: "link")
+                    .font(.system(size: 11))
+                Text("@\(githubUsername)")
+                    .font(.system(size: 13))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                    .allowsTightening(true)
+            }
+            .foregroundStyle(.secondary)
+        } else {
+            HStack(spacing: 4) {
+                Image(systemName: "questionmark.circle")
+                    .font(.system(size: 11))
+                Text("GitHub profile unknown")
+                    .font(.system(size: 13))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                    .allowsTightening(true)
+            }
+            .foregroundStyle(.secondary)
         }
     }
 }
 
 struct GlowingAvatarView: View {
     @Bindable var motionPolicy: MotionPolicy
-    let imageName: String
-    let imageExtension: String
+    let imageName: String?
+    let imageExtension: String?
     let tier: SponsorTier
 
     @State private var isAnimating = false
 
     private var avatarImage: NSImage? {
-        guard let url = Bundle.module.url(forResource: imageName, withExtension: imageExtension),
+        guard let imageName,
+              let imageExtension,
+              let url = Bundle.module.url(forResource: imageName, withExtension: imageExtension),
               let image = NSImage(contentsOf: url)
         else {
             return nil

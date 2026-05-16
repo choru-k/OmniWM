@@ -11,11 +11,25 @@
 <table align="center">
   <tr>
     <td align="center">
+      <a href="https://github.com/adelin-b" title="Adelin Berard">
+        <img src="https://github.com/adelin-b.png?size=96" width="96" alt="Adelin Berard">
+      </a>
+      <br>
+      <a href="https://github.com/adelin-b"><strong>Adelin Berard</strong></a>
+    </td>
+    <td align="center">
       <a href="https://github.com/balazshevesi" title="Balazs Hevesi">
         <img src="https://github.com/balazshevesi.png?size=96" width="96" alt="Balazs Hevesi">
       </a>
       <br>
       <a href="https://github.com/balazshevesi"><strong>Balazs Hevesi</strong></a>
+    </td>
+    <td align="center">
+      <a href="https://github.com/chen259456754" title="chen259456754">
+        <img src="https://github.com/chen259456754.png?size=96" width="96" alt="chen259456754">
+      </a>
+      <br>
+      <a href="https://github.com/chen259456754"><strong>chen259456754</strong></a>
     </td>
     <td align="center">
       <a href="https://github.com/janhesters" title="Jan Hesters">
@@ -44,6 +58,27 @@
       </a>
       <br>
       <a href="https://github.com/zucram"><strong>Marcus Harlid Davin</strong></a>
+    </td>
+    <td align="center">
+      <a href="https://github.com/mkdir700" title="mkdir700">
+        <img src="https://github.com/mkdir700.png?size=96" width="96" alt="mkdir700">
+      </a>
+      <br>
+      <a href="https://github.com/mkdir700"><strong>mkdir700</strong></a>
+    </td>
+    <td align="center">
+      <a href="https://github.com/zwo-bot" title="mm">
+        <img src="https://github.com/zwo-bot.png?size=96" width="96" alt="mm">
+      </a>
+      <br>
+      <a href="https://github.com/zwo-bot"><strong>mm</strong></a>
+    </td>
+    <td align="center">
+      <a href="https://github.com/siketyan" title="Naoki Ikeguchi">
+        <img src="https://github.com/siketyan.png?size=96" width="96" alt="Naoki Ikeguchi">
+      </a>
+      <br>
+      <a href="https://github.com/siketyan"><strong>Naoki Ikeguchi</strong></a>
     </td>
     <td align="center">
       <a href="https://github.com/georgebastille" title="Rich Hanes">
