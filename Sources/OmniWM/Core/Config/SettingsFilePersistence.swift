@@ -52,6 +52,7 @@ final class SettingsFilePersistence {
     private var saveScheduled = false
     private var lastWrittenFingerprint: FileFingerprint?
     private var lastObservedFingerprint: FileFingerprint?
+    private var lastPersistedExport: SettingsExport?
     private var onExternalChange: (@MainActor (SettingsExport) -> Void)?
 
     init(
@@ -94,6 +95,7 @@ final class SettingsFilePersistence {
 
             let snapshot = try readSnapshot()
             lastObservedFingerprint = snapshot.fingerprint
+            lastPersistedExport = snapshot.export
             return snapshot.export
         } catch {
             report("Failed to load \(fileURL.path): \(error.localizedDescription)")
@@ -114,12 +116,22 @@ final class SettingsFilePersistence {
 
     func saveImmediately(_ export: SettingsExport) throws {
         try ensureDirectoryExists()
+        let observedFingerprint = currentFingerprint()
+        if let fingerprint = observedFingerprint,
+           fingerprint == lastObservedFingerprint,
+           export == lastPersistedExport
+        {
+            refreshSettingsFileWatcher(for: fingerprint)
+            return
+        }
+
         let data = try SettingsTOMLCodec.encode(export)
         try data.write(to: fileURL, options: .atomic)
 
         let fingerprint = currentFingerprint()
         lastWrittenFingerprint = fingerprint
         lastObservedFingerprint = fingerprint
+        lastPersistedExport = export
         refreshSettingsFileWatcher(for: fingerprint)
     }
 
@@ -157,6 +169,7 @@ final class SettingsFilePersistence {
         do {
             let snapshot = try readSnapshot()
             lastObservedFingerprint = snapshot.fingerprint
+            lastPersistedExport = snapshot.export
             return snapshot.export
         } catch {
             report("Ignoring invalid external settings edit at \(fileURL.path): \(error.localizedDescription)")

@@ -120,8 +120,6 @@ struct SettingsExport: Equatable {
     var clipboardMaxItemBytes: Int
     var clipboardMaxTotalBytes: Int
 
-    var hiddenBarIsCollapsed: Bool
-
     var quakeTerminalEnabled: Bool
     var quakeTerminalPosition: String
     var quakeTerminalWidthPercent: Double
@@ -223,7 +221,6 @@ extension SettingsExport {
             clipboardMaxItems: 200,
             clipboardMaxItemBytes: 8_388_608,
             clipboardMaxTotalBytes: 67_108_864,
-            hiddenBarIsCollapsed: true,
             quakeTerminalEnabled: true,
             quakeTerminalPosition: QuakeTerminalPosition.center.rawValue,
             quakeTerminalWidthPercent: 50.0,

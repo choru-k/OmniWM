@@ -334,8 +334,8 @@ final class SettingsStore {
         didSet { scheduleSave() }
     }
 
-    var hiddenBarIsCollapsed = SettingsStore.defaultExport.hiddenBarIsCollapsed {
-        didSet { scheduleSave() }
+    var hiddenBarIsCollapsed = RuntimeStateStore.defaultHiddenBarIsCollapsed {
+        didSet { runtimeState.hiddenBarIsCollapsed = hiddenBarIsCollapsed }
     }
 
     var quakeTerminalEnabled = SettingsStore.defaultExport.quakeTerminalEnabled {
@@ -462,6 +462,7 @@ final class SettingsStore {
         self.persistence = persistence
         self.runtimeState = runtimeState
         self.autosaveEnabled = autosaveEnabled
+        hiddenBarIsCollapsed = runtimeState.hiddenBarIsCollapsed
 
         applyExport(
             persistence.load(),
@@ -487,6 +488,7 @@ final class SettingsStore {
         } else {
             persistence.save(toExport())
         }
+        runtimeState.flushNow()
     }
 
     func toExport() -> SettingsExport {
@@ -571,7 +573,6 @@ final class SettingsStore {
             clipboardMaxItems: clipboardMaxItems,
             clipboardMaxItemBytes: clipboardMaxItemBytes,
             clipboardMaxTotalBytes: clipboardMaxTotalBytes,
-            hiddenBarIsCollapsed: hiddenBarIsCollapsed,
             quakeTerminalEnabled: quakeTerminalEnabled,
             quakeTerminalPosition: quakeTerminalPosition.rawValue,
             quakeTerminalWidthPercent: quakeTerminalWidthPercent,
@@ -685,8 +686,6 @@ final class SettingsStore {
         clipboardMaxItemBytes = export.clipboardMaxItemBytes
         clipboardMaxTotalBytes = export.clipboardMaxTotalBytes
 
-        hiddenBarIsCollapsed = export.hiddenBarIsCollapsed
-
         quakeTerminalEnabled = export.quakeTerminalEnabled
         quakeTerminalPosition = QuakeTerminalPosition(rawValue: export.quakeTerminalPosition) ?? .center
         quakeTerminalWidthPercent = QuakeTerminalGeometryPolicy.normalizedDimensionPercent(export.quakeTerminalWidthPercent)
@@ -791,37 +790,6 @@ final class SettingsStore {
         }
 
         return resolved
-    }
-
-    @discardableResult
-    func persistEffectiveMouseWarpMonitorOrder(for monitors: [Monitor], axis: MouseWarpAxis? = nil) -> [String] {
-        let warpAxis = axis ?? mouseWarpAxis
-        let sortedNames = warpAxis.sortedMonitors(monitors).map(\.name)
-        guard !sortedNames.isEmpty else { return [] }
-
-        var persisted = mouseWarpMonitorOrder
-        var persistedCounts = persisted.reduce(into: [String: Int]()) { counts, name in
-            counts[name, default: 0] += 1
-        }
-        let currentCounts = sortedNames.reduce(into: [String: Int]()) { counts, name in
-            counts[name, default: 0] += 1
-        }
-
-        for name in sortedNames {
-            let currentCount = currentCounts[name, default: 0]
-            let persistedCount = persistedCounts[name, default: 0]
-            guard persistedCount < currentCount else { continue }
-            for _ in 0 ..< (currentCount - persistedCount) {
-                persisted.append(name)
-            }
-            persistedCounts[name] = currentCount
-        }
-
-        if mouseWarpMonitorOrder != persisted {
-            mouseWarpMonitorOrder = persisted
-        }
-
-        return effectiveMouseWarpMonitorOrder(for: monitors, axis: warpAxis)
     }
 
     static func normalizedWorkspaceConfigurations(

@@ -168,7 +168,6 @@ struct CanonicalTOMLConfig: Codable, Equatable {
 
     struct State: Codable, Equatable {
         var commandPaletteLastMode: String
-        var hiddenBarIsCollapsed: Bool
     }
 }
 
@@ -597,7 +596,6 @@ extension CanonicalTOMLConfig.State {
             default: defaults.commandPaletteLastMode,
             recovering: recovering
         )
-        hiddenBarIsCollapsed = try container.decode(Bool.self, forKey: .hiddenBarIsCollapsed, default: defaults.hiddenBarIsCollapsed, recovering: recovering)
     }
 }
 
@@ -721,10 +719,7 @@ extension CanonicalTOMLConfig {
             customFrame: customFrame
         )
         appearance = Appearance(mode: export.appearanceMode)
-        state = State(
-            commandPaletteLastMode: export.commandPaletteLastMode,
-            hiddenBarIsCollapsed: export.hiddenBarIsCollapsed
-        )
+        state = State(commandPaletteLastMode: export.commandPaletteLastMode)
         hotkeys = export.hotkeyBindings
         workspaces = export.workspaceConfigurations
         appRules = export.appRules
@@ -819,7 +814,6 @@ extension CanonicalTOMLConfig {
             clipboardMaxItems: clipboard.maxItems,
             clipboardMaxItemBytes: clipboard.maxItemBytes,
             clipboardMaxTotalBytes: clipboard.maxTotalBytes,
-            hiddenBarIsCollapsed: state.hiddenBarIsCollapsed,
             quakeTerminalEnabled: quakeTerminal.enabled,
             quakeTerminalPosition: quakeTerminal.position,
             quakeTerminalWidthPercent: quakeTerminal.widthPercent,

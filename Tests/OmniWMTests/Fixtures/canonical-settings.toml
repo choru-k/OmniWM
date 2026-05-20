@@ -88,7 +88,6 @@ widthPercent = 50.0
 
 [state]
 commandPaletteLastMode = "windows"
-hiddenBarIsCollapsed = true
 
 [statusBar]
 showAppNames = false

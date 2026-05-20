@@ -531,6 +531,7 @@ private extension String {
         let expected = try String(contentsOf: fixtureURL, encoding: .utf8)
         let data = try SettingsTOMLCodec.encode(SettingsExport.defaults())
         let actual = try #require(String(data: data, encoding: .utf8))
+        #expect(!actual.contains("hiddenBarIsCollapsed"))
 
         if expected != actual {
             let diffURL = FileManager.default.temporaryDirectory

@@ -521,7 +521,7 @@ private func waitUntilServiceLifecycleTest(
         #expect(controller.workspaceManager.activeWorkspace(on: newMonitor.id)?.id == workspaceId)
     }
 
-    @Test @MainActor func monitorTopologyChangesRecomputeMouseWarpPolicyAndPreserveSavedOrder() {
+    @Test @MainActor func monitorTopologyChangesRecomputeMouseWarpPolicyWithoutSeedingSavedOrder() {
         let defaults = makeLifecycleTestDefaults()
         let settings = SettingsStore(defaults: defaults)
         let controller = WMController(settings: settings)
@@ -536,7 +536,8 @@ private func waitUntilServiceLifecycleTest(
         )
 
         #expect(controller.isMouseWarpPolicyEnabled)
-        #expect(settings.mouseWarpMonitorOrder == ["Left", "Right"])
+        #expect(settings.mouseWarpMonitorOrder == [])
+        #expect(settings.effectiveMouseWarpMonitorOrder(for: [left, right]) == ["Left", "Right"])
 
         lifecycleManager.applyMonitorConfigurationChanged(
             currentMonitors: [left],
@@ -544,7 +545,8 @@ private func waitUntilServiceLifecycleTest(
         )
 
         #expect(!controller.isMouseWarpPolicyEnabled)
-        #expect(settings.mouseWarpMonitorOrder == ["Left", "Right"])
+        #expect(settings.mouseWarpMonitorOrder == [])
+        #expect(settings.effectiveMouseWarpMonitorOrder(for: [left]) == ["Left"])
 
         lifecycleManager.applyMonitorConfigurationChanged(
             currentMonitors: [left, right],
@@ -552,6 +554,45 @@ private func waitUntilServiceLifecycleTest(
         )
 
         #expect(controller.isMouseWarpPolicyEnabled)
-        #expect(settings.mouseWarpMonitorOrder == ["Left", "Right"])
+        #expect(settings.mouseWarpMonitorOrder == [])
+        #expect(settings.effectiveMouseWarpMonitorOrder(for: [left, right]) == ["Left", "Right"])
+    }
+
+    @Test @MainActor func monitorTopologyChangesPreserveExplicitMouseWarpOrder() {
+        let defaults = makeLifecycleTestDefaults()
+        let settings = SettingsStore(defaults: defaults)
+        settings.mouseWarpMonitorOrder = ["Right", "Left"]
+        let controller = WMController(settings: settings)
+        let lifecycleManager = ServiceLifecycleManager(controller: controller)
+
+        let left = makeLifecycleMonitor(displayId: 100, name: "Left", x: 0, y: 0)
+        let right = makeLifecycleMonitor(displayId: 200, name: "Right", x: 1920, y: 0)
+
+        lifecycleManager.applyMonitorConfigurationChanged(
+            currentMonitors: [left, right],
+            performPostUpdateActions: false
+        )
+
+        #expect(controller.isMouseWarpPolicyEnabled)
+        #expect(settings.mouseWarpMonitorOrder == ["Right", "Left"])
+        #expect(settings.effectiveMouseWarpMonitorOrder(for: [left, right]) == ["Right", "Left"])
+
+        lifecycleManager.applyMonitorConfigurationChanged(
+            currentMonitors: [left],
+            performPostUpdateActions: false
+        )
+
+        #expect(!controller.isMouseWarpPolicyEnabled)
+        #expect(settings.mouseWarpMonitorOrder == ["Right", "Left"])
+        #expect(settings.effectiveMouseWarpMonitorOrder(for: [left]) == ["Left"])
+
+        lifecycleManager.applyMonitorConfigurationChanged(
+            currentMonitors: [left, right],
+            performPostUpdateActions: false
+        )
+
+        #expect(controller.isMouseWarpPolicyEnabled)
+        #expect(settings.mouseWarpMonitorOrder == ["Right", "Left"])
+        #expect(settings.effectiveMouseWarpMonitorOrder(for: [left, right]) == ["Right", "Left"])
     }
 }

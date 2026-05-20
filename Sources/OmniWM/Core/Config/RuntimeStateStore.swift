@@ -5,12 +5,14 @@ struct RuntimeState: Codable, Equatable {
     var windowRestoreCatalog: PersistedWindowRestoreCatalog?
     var updaterLastCheckedAt: Date?
     var updaterSkippedReleaseTag: String?
+    var hiddenBarIsCollapsed: Bool?
 }
 
 @MainActor
 final class RuntimeStateStore {
     nonisolated static let defaultDirectoryURL = SettingsFilePersistence.defaultDirectoryURL
     nonisolated static let fileName = "runtime-state.json"
+    nonisolated static let defaultHiddenBarIsCollapsed = true
     nonisolated static var fileURL: URL {
         defaultDirectoryURL.appendingPathComponent(fileName, isDirectory: false)
     }
@@ -90,6 +92,15 @@ final class RuntimeStateStore {
         set {
             guard state.updaterSkippedReleaseTag != newValue else { return }
             state.updaterSkippedReleaseTag = newValue
+            scheduleSave()
+        }
+    }
+
+    var hiddenBarIsCollapsed: Bool {
+        get { state.hiddenBarIsCollapsed ?? Self.defaultHiddenBarIsCollapsed }
+        set {
+            guard hiddenBarIsCollapsed != newValue else { return }
+            state.hiddenBarIsCollapsed = newValue
             scheduleSave()
         }
     }

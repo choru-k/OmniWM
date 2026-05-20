@@ -585,10 +585,6 @@ final class WMController {
         let effectiveMonitors = monitors ?? workspaceManager.monitors
         let shouldEnable = shouldUseMouseWarp(for: effectiveMonitors)
 
-        if shouldEnable {
-            _ = settings.persistEffectiveMouseWarpMonitorOrder(for: effectiveMonitors)
-        }
-
         guard shouldEnable != isMouseWarpPolicyEnabled else {
             return shouldEnable
         }

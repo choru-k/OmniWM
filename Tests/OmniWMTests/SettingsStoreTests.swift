@@ -163,6 +163,35 @@ private func atomicallyReplaceSettingsDataForTests(
     }
 }
 
+private struct SettingsFileSnapshot: Equatable {
+    let deviceID: UInt64
+    let inode: UInt64
+    let modificationTimeNanoseconds: Int64
+    let statusChangeTimeNanoseconds: Int64
+    let fileSize: UInt64
+    let contents: Data
+}
+
+private func settingsFileSnapshot(_ url: URL) throws -> SettingsFileSnapshot {
+    var statBuffer = stat()
+    let result = url.withUnsafeFileSystemRepresentation { path -> CInt in
+        guard let path else { return -1 }
+        return Darwin.fstatat(AT_FDCWD, path, &statBuffer, 0)
+    }
+    guard result == 0 else {
+        throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
+    }
+
+    return SettingsFileSnapshot(
+        deviceID: UInt64(statBuffer.st_dev),
+        inode: UInt64(statBuffer.st_ino),
+        modificationTimeNanoseconds: Int64(statBuffer.st_mtimespec.tv_sec) * 1_000_000_000 + Int64(statBuffer.st_mtimespec.tv_nsec),
+        statusChangeTimeNanoseconds: Int64(statBuffer.st_ctimespec.tv_sec) * 1_000_000_000 + Int64(statBuffer.st_ctimespec.tv_nsec),
+        fileSize: UInt64(statBuffer.st_size),
+        contents: try Data(contentsOf: url)
+    )
+}
+
 struct MonitorSettingsStoreTests {
     @Test func getReturnsNilForUnknownMonitor() {
         let settings = [MonitorNiriSettings(monitorName: "Monitor A")]
@@ -317,7 +346,6 @@ struct SettingsExportTests {
         #expect(defaults.clipboardMaxItems == 200)
         #expect(defaults.clipboardMaxItemBytes == 8_388_608)
         #expect(defaults.clipboardMaxTotalBytes == 67_108_864)
-        #expect(defaults.hiddenBarIsCollapsed == true)
         #expect(defaults.quakeTerminalEnabled == true)
         #expect(defaults.quakeTerminalPosition == QuakeTerminalPosition.center.rawValue)
         #expect(defaults.quakeTerminalWidthPercent == 50.0)
@@ -851,7 +879,7 @@ struct HotkeySurfaceTests {
         #expect(settings.clipboardMaxItems == 200)
         #expect(settings.clipboardMaxItemBytes == 8_388_608)
         #expect(settings.clipboardMaxTotalBytes == 67_108_864)
-        #expect(settings.hiddenBarIsCollapsed == true)
+        #expect(settings.hiddenBarIsCollapsed == RuntimeStateStore.defaultHiddenBarIsCollapsed)
         #expect(settings.quakeTerminalEnabled == true)
         #expect(settings.quakeTerminalPosition == .center)
         #expect(settings.quakeTerminalWidthPercent == 50.0)
@@ -892,7 +920,7 @@ struct HotkeySurfaceTests {
         #expect(settings.clipboardMaxItems == exportDefaults.clipboardMaxItems)
         #expect(settings.clipboardMaxItemBytes == exportDefaults.clipboardMaxItemBytes)
         #expect(settings.clipboardMaxTotalBytes == exportDefaults.clipboardMaxTotalBytes)
-        #expect(settings.hiddenBarIsCollapsed == exportDefaults.hiddenBarIsCollapsed)
+        #expect(settings.hiddenBarIsCollapsed == RuntimeStateStore.defaultHiddenBarIsCollapsed)
         #expect(settings.updateChecksEnabled == exportDefaults.updateChecksEnabled)
         #expect(settings.ipcEnabled == exportDefaults.ipcEnabled)
         #expect(settings.quakeTerminalPosition.rawValue == exportDefaults.quakeTerminalPosition)
@@ -937,6 +965,128 @@ struct SettingsSectionTests {
         #expect(state.updaterLastCheckedAt == now)
         #expect(state.updaterSkippedReleaseTag == "0.5")
     }
+
+    @Test func hiddenBarCollapseStateRoundTripsThroughRuntimeStateStore() {
+        let defaults = makeTestDefaults()
+        let directory = configurationDirectoryForTests(defaults: defaults)
+        let store = RuntimeStateStore(directory: directory)
+
+        #expect(store.hiddenBarIsCollapsed == RuntimeStateStore.defaultHiddenBarIsCollapsed)
+
+        store.hiddenBarIsCollapsed = false
+        store.flushNow()
+
+        let reloaded = RuntimeStateStore(directory: directory)
+        #expect(reloaded.hiddenBarIsCollapsed == false)
+    }
+
+    @Test func missingHiddenBarRuntimeKeyPreservesExistingRuntimeState() throws {
+        let defaults = makeTestDefaults()
+        let directory = configurationDirectoryForTests(defaults: defaults)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let runtimeURL = directory.appendingPathComponent(RuntimeStateStore.fileName, isDirectory: false)
+        try Data(#"{"updaterSkippedReleaseTag":"0.5"}"#.utf8).write(to: runtimeURL)
+
+        let reloaded = RuntimeStateStore(directory: directory)
+        #expect(reloaded.hiddenBarIsCollapsed == RuntimeStateStore.defaultHiddenBarIsCollapsed)
+        #expect(reloaded.updaterSkippedReleaseTag == "0.5")
+    }
+}
+
+@MainActor struct HiddenBarRuntimeStateSettingsTests {
+    @Test func hiddenBarChangesWriteRuntimeStateWithoutRewritingSettingsFile() throws {
+        let defaults = makeTestDefaults()
+        let settings = SettingsStore(defaults: defaults)
+        let beforeSettings = try settingsFileSnapshot(settings.settingsFileURL)
+
+        settings.hiddenBarIsCollapsed = false
+        settings.flushNow()
+
+        let afterSettings = try settingsFileSnapshot(settings.settingsFileURL)
+        let runtimeState = RuntimeStateStore(directory: configurationDirectoryForTests(defaults: defaults))
+
+        #expect(afterSettings == beforeSettings)
+        #expect(runtimeState.hiddenBarIsCollapsed == false)
+    }
+
+    @Test func hiddenBarFlushWritesDeferredRuntimeState() {
+        let defaults = makeTestDefaults()
+        let directory = configurationDirectoryForTests(defaults: defaults)
+        let settings = SettingsStore(
+            persistence: SettingsFilePersistence(directory: directory, startWatching: false, deferSaves: false),
+            runtimeState: RuntimeStateStore(directory: directory)
+        )
+
+        settings.hiddenBarIsCollapsed = false
+        settings.flushNow()
+
+        let reloaded = RuntimeStateStore(directory: directory)
+        #expect(reloaded.hiddenBarIsCollapsed == false)
+    }
+
+    @Test func hiddenBarRuntimeStateSurvivesSettingsStoreReload() {
+        let defaults = makeTestDefaults()
+        let directory = configurationDirectoryForTests(defaults: defaults)
+        let settings = SettingsStore(defaults: defaults)
+
+        settings.hiddenBarIsCollapsed = false
+        settings.flushNow()
+
+        let reloaded = SettingsStore(
+            persistence: SettingsFilePersistence(directory: directory, startWatching: false, deferSaves: false),
+            runtimeState: RuntimeStateStore(directory: directory, deferSaves: false)
+        )
+
+        #expect(reloaded.hiddenBarIsCollapsed == false)
+    }
+
+    @Test func legacyHiddenBarTOMLKeyDoesNotOverrideRuntimeState() throws {
+        let defaults = makeTestDefaults()
+        let directory = configurationDirectoryForTests(defaults: defaults)
+        var export = SettingsExport.defaults()
+        export.commandPaletteLastMode = CommandPaletteMode.clipboard.rawValue
+        var toml = try #require(String(data: SettingsTOMLCodec.encode(export), encoding: .utf8))
+        toml = toml.replacingOccurrences(
+            of: "commandPaletteLastMode = \"clipboard\"",
+            with: "commandPaletteLastMode = \"clipboard\"\nhiddenBarIsCollapsed = false"
+        )
+        try #require(toml.contains("hiddenBarIsCollapsed = false"))
+        let settingsURL = directory.appendingPathComponent("settings.toml", isDirectory: false)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try Data(toml.utf8).write(to: settingsURL)
+
+        let settings = SettingsStore(
+            persistence: SettingsFilePersistence(directory: directory, startWatching: false, deferSaves: false),
+            runtimeState: RuntimeStateStore(directory: directory, deferSaves: false)
+        )
+
+        #expect(settings.commandPaletteLastMode == .clipboard)
+        #expect(settings.hiddenBarIsCollapsed == RuntimeStateStore.defaultHiddenBarIsCollapsed)
+    }
+
+    @Test func externalSettingsReloadDoesNotChangeHiddenBarRuntimeState() async throws {
+        let defaults = makeTestDefaults()
+        let directory = configurationDirectoryForTests(defaults: defaults)
+        let settings = SettingsStore(
+            persistence: SettingsFilePersistence(directory: directory),
+            runtimeState: RuntimeStateStore(directory: directory)
+        )
+        settings.hiddenBarIsCollapsed = false
+        settings.flushNow()
+
+        var export = settings.toExport()
+        export.focusFollowsWindowToMonitor = true
+        try writeSettingsExport(export, to: settings.settingsFileURL)
+
+        let reloaded = await waitForConditionForTests(
+            timeoutNanoseconds: 20_000_000_000
+        ) {
+            settings.focusFollowsWindowToMonitor == true
+        }
+
+        #expect(reloaded)
+        #expect(settings.hiddenBarIsCollapsed == false)
+    }
 }
 
 @MainActor struct SettingsFilePersistenceTests {
@@ -949,6 +1099,62 @@ struct SettingsSectionTests {
 
         #expect(export == SettingsExport.defaults())
         #expect(FileManager.default.fileExists(atPath: persistence.fileURL.path))
+    }
+
+    @Test func sameExportSaveDoesNotRewriteExistingSettingsFile() throws {
+        let defaults = makeTestDefaults()
+        let directory = configurationDirectoryForTests(defaults: defaults)
+        let persistence = SettingsFilePersistence(directory: directory, startWatching: false)
+        let export = persistence.load()
+        let before = try settingsFileSnapshot(persistence.fileURL)
+
+        try persistence.saveImmediately(export)
+
+        let after = try settingsFileSnapshot(persistence.fileURL)
+        #expect(after == before)
+    }
+
+    @Test func sameExportSaveRecreatesDeletedSettingsFile() throws {
+        let defaults = makeTestDefaults()
+        let directory = configurationDirectoryForTests(defaults: defaults)
+        let persistence = SettingsFilePersistence(directory: directory, startWatching: false)
+        let export = persistence.load()
+        try FileManager.default.removeItem(at: persistence.fileURL)
+
+        try persistence.saveImmediately(export)
+
+        #expect(FileManager.default.fileExists(atPath: persistence.fileURL.path))
+    }
+
+    @Test func sameExportSaveOverwritesUnseenExternalReplacement() throws {
+        let defaults = makeTestDefaults()
+        let directory = configurationDirectoryForTests(defaults: defaults)
+        let persistence = SettingsFilePersistence(directory: directory, startWatching: false)
+        let export = persistence.load()
+        var externalExport = export
+        externalExport.gapSize = 31
+        try writeSettingsExport(externalExport, to: persistence.fileURL)
+
+        try persistence.saveImmediately(export)
+
+        let decoded = try SettingsTOMLCodec.decode(Data(contentsOf: persistence.fileURL))
+        #expect(decoded == export)
+    }
+
+    @Test func changedExportStillRewritesSettingsFile() throws {
+        let defaults = makeTestDefaults()
+        let directory = configurationDirectoryForTests(defaults: defaults)
+        let persistence = SettingsFilePersistence(directory: directory, startWatching: false)
+        var export = persistence.load()
+        let before = try settingsFileSnapshot(persistence.fileURL)
+        export.gapSize = 23
+
+        try persistence.saveImmediately(export)
+
+        let after = try settingsFileSnapshot(persistence.fileURL)
+        let decoded = try SettingsTOMLCodec.decode(after.contents)
+        #expect(after != before)
+        #expect(decoded.gapSize == 23)
     }
 
     @Test func corruptFileIsRenamedAsideAndReplacedWithDefaults() throws {

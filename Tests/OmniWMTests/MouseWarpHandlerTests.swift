@@ -350,12 +350,15 @@ private func expectWarpAndPost(_ recorder: WarpEffectRecorder, _ expectedPoint: 
         #expect(fixture.recorder.postedPoints.isEmpty)
     }
 
-    @Test @MainActor func policySeedsDefaultOrderBeforeWarpingFreshMultiMonitorSetup() {
+    @Test @MainActor func policyUsesTransientDefaultOrderBeforeWarpingFreshMultiMonitorSetup() {
         let fixture = makeMouseWarpTestFixture()
         defer { fixture.handler.cleanup() }
 
         fixture.controller.settings.mouseWarpMonitorOrder = []
         _ = fixture.controller.syncMouseWarpPolicy(for: [fixture.leftMonitor, fixture.rightMonitor])
+        let effectiveOrder = fixture.controller.settings.effectiveMouseWarpMonitorOrder(
+            for: [fixture.leftMonitor, fixture.rightMonitor]
+        )
 
         let location = CGPoint(
             x: fixture.leftMonitor.frame.maxX - CGFloat(fixture.controller.settings.mouseWarpMargin) + 1,
@@ -371,7 +374,8 @@ private func expectWarpAndPost(_ recorder: WarpEffectRecorder, _ expectedPoint: 
             y: fixture.rightMonitor.frame.midY
         ))
 
-        #expect(fixture.controller.settings.mouseWarpMonitorOrder == ["Left", "Right"])
+        #expect(fixture.controller.settings.mouseWarpMonitorOrder == [])
+        #expect(effectiveOrder == ["Left", "Right"])
         expectWarpAndPost(fixture.recorder, expectedPoint)
     }
 
