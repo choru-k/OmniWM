@@ -3,12 +3,207 @@ import Foundation
 import OmniWMIPC
 import Testing
 
+private enum TOMLMutationError: Error {
+    case noMatch(String)
+    case residualMatch(String)
+}
+
+private extension String {
+    func replacingRegex(
+        _ pattern: String,
+        with replacement: String = "",
+        options: NSRegularExpression.Options = [.anchorsMatchLines]
+    ) throws -> String {
+        let regex = try NSRegularExpression(pattern: pattern, options: options)
+        let range = NSRange(startIndex..., in: self)
+        guard regex.numberOfMatches(in: self, range: range) > 0 else {
+            throw TOMLMutationError.noMatch(pattern)
+        }
+        return regex.stringByReplacingMatches(in: self, range: range, withTemplate: replacement)
+    }
+
+    func removingRegex(
+        _ pattern: String,
+        options: NSRegularExpression.Options = [.anchorsMatchLines]
+    ) throws -> String {
+        let result = try replacingRegex(pattern, options: options)
+        let regex = try NSRegularExpression(pattern: pattern, options: options)
+        let range = NSRange(result.startIndex..., in: result)
+        guard regex.firstMatch(in: result, range: range) == nil else {
+            throw TOMLMutationError.residualMatch(pattern)
+        }
+        return result
+    }
+
+    func removingKey(_ key: String) throws -> String {
+        let escaped = NSRegularExpression.escapedPattern(for: key)
+        return try removingRegex("^\\s*\(escaped)\\s*=.*\\n")
+    }
+
+    func removingKey(_ key: String, inSection section: String) throws -> String {
+        let escapedKey = NSRegularExpression.escapedPattern(for: key)
+        let escapedSection = NSRegularExpression.escapedPattern(for: section)
+        let pattern = "(^\\[\(escapedSection)\\]\\n(?:(?!^\\[).*\\n)*?)^\\s*\(escapedKey)\\s*=.*\\n"
+        let result = try replacingRegex(pattern, with: "$1")
+        let sectionPattern = "^\\[\(escapedSection)\\]\\n(?:(?!^\\[).*\\n)*?^\\s*\(escapedKey)\\s*=.*\\n"
+        let regex = try NSRegularExpression(pattern: sectionPattern, options: [.anchorsMatchLines])
+        let range = NSRange(result.startIndex..., in: result)
+        guard regex.firstMatch(in: result, range: range) == nil else {
+            throw TOMLMutationError.residualMatch(sectionPattern)
+        }
+        return result
+    }
+
+    func removingSection(_ section: String) throws -> String {
+        let escaped = NSRegularExpression.escapedPattern(for: section)
+        return try removingRegex(
+            "^\\[\(escaped)\\]\\n.*?(?=^\\[|\\z)",
+            options: [.anchorsMatchLines, .dotMatchesLineSeparators]
+        )
+    }
+
+    func removingArraySection(_ section: String) throws -> String {
+        let escaped = NSRegularExpression.escapedPattern(for: section)
+        return try removingRegex(
+            "^\\[\\[\(escaped)\\]\\]\\n.*?(?=^\\[|\\z)",
+            options: [.anchorsMatchLines, .dotMatchesLineSeparators]
+        )
+    }
+}
+
 @Suite struct SettingsTOMLCodecTests {
     @Test func roundTripsDefaults() throws {
         let original = SettingsExport.defaults()
         let data = try SettingsTOMLCodec.encode(original)
         let decoded = try SettingsTOMLCodec.decode(data)
         #expect(decoded == original)
+    }
+
+    @Test func decodesMissingRequiredSettingsFromCanonicalDefaults() throws {
+        let defaults = SettingsExport.defaults()
+        var original = defaults
+        original.hotkeysEnabled = false
+        original.workspaceBarEnabled = false
+        original.workspaceBarHideEmptyWorkspaces = true
+        original.mouseResizeModifierKey = MouseResizeModifierKey.controlCommandShift.rawValue
+        original.animationsEnabled = false
+        original.clipboardHistoryEnabled = false
+        original.clipboardMaxItems = 17
+        original.clipboardMaxItemBytes = 18_000
+        original.clipboardMaxTotalBytes = 180_000
+        original.outerGapLeft = 7
+        original.outerGapRight = 8
+        original.outerGapTop = 9
+        original.outerGapBottom = 10
+        original.mouseWarpAxis = nil
+        original.quakeTerminalOpacity = nil
+        original.quakeTerminalMonitorMode = nil
+        original.niriDefaultColumnWidth = nil
+
+        let data = try SettingsTOMLCodec.encode(original)
+        let output = try #require(String(data: data, encoding: .utf8))
+        let olderConfig = try output
+            .removingKey("animationsEnabled")
+            .removingKey("hideEmptyWorkspaces")
+            .removingKey("mouseResizeModifierKey")
+            .removingSection("clipboard")
+            .removingSection("gaps.outer")
+
+        let decoded = try SettingsTOMLCodec.decode(Data(olderConfig.utf8))
+
+        #expect(decoded.hotkeysEnabled == false)
+        #expect(decoded.workspaceBarEnabled == false)
+        #expect(decoded.animationsEnabled == defaults.animationsEnabled)
+        #expect(decoded.workspaceBarHideEmptyWorkspaces == defaults.workspaceBarHideEmptyWorkspaces)
+        #expect(decoded.mouseResizeModifierKey == defaults.mouseResizeModifierKey)
+        #expect(decoded.clipboardHistoryEnabled == defaults.clipboardHistoryEnabled)
+        #expect(decoded.clipboardMaxItems == defaults.clipboardMaxItems)
+        #expect(decoded.outerGapLeft == defaults.outerGapLeft)
+        #expect(decoded.outerGapRight == defaults.outerGapRight)
+        #expect(decoded.outerGapTop == defaults.outerGapTop)
+        #expect(decoded.outerGapBottom == defaults.outerGapBottom)
+        #expect(decoded.mouseWarpAxis == nil)
+        #expect(decoded.quakeTerminalOpacity == nil)
+        #expect(decoded.quakeTerminalMonitorMode == nil)
+        #expect(decoded.niriDefaultColumnWidth == nil)
+    }
+
+    @Test func recoveryPreservesExplicitValuesWhenOtherRequiredKeysAreMissing() throws {
+        var original = SettingsExport.defaults()
+        original.mouseResizeModifierKey = MouseResizeModifierKey.controlCommandShift.rawValue
+        original.workspaceBarTextColorRed = 0.2
+        original.workspaceBarTextColorGreen = 0.3
+        original.workspaceBarTextColorBlue = 0.4
+        original.workspaceBarTextColorAlpha = 0.5
+
+        let data = try SettingsTOMLCodec.encode(original)
+        let output = try #require(String(data: data, encoding: .utf8))
+        let olderConfig = try output
+            .removingKey("animationsEnabled")
+            .removingKey("red", inSection: "workspaceBar.textColor")
+
+        let decoded = try SettingsTOMLCodec.decode(Data(olderConfig.utf8))
+
+        #expect(decoded.mouseResizeModifierKey == MouseResizeModifierKey.controlCommandShift.rawValue)
+        #expect(decoded.workspaceBarTextColorRed == SettingsExport.defaults().workspaceBarTextColorRed)
+        #expect(decoded.workspaceBarTextColorGreen == 0.3)
+        #expect(decoded.workspaceBarTextColorBlue == 0.4)
+        #expect(decoded.workspaceBarTextColorAlpha == 0.5)
+    }
+
+    @Test func recoveryDefaultsOnlyMissingTopLevelArrays() throws {
+        let defaults = SettingsExport.defaults()
+        var nonDefaultHotkeys = defaults
+        nonDefaultHotkeys.hotkeyBindings = [try #require(defaults.hotkeyBindings.first)]
+
+        let data = try SettingsTOMLCodec.encode(nonDefaultHotkeys)
+        let output = try #require(String(data: data, encoding: .utf8))
+        let withoutHotkeys = try output.removingArraySection("hotkeys")
+        let decodedWithoutHotkeys = try SettingsTOMLCodec.decode(Data(withoutHotkeys.utf8))
+
+        #expect(decodedWithoutHotkeys.hotkeyBindings == defaults.hotkeyBindings)
+
+        var emptyHotkeys = defaults
+        emptyHotkeys.hotkeyBindings = []
+        let emptyData = try SettingsTOMLCodec.encode(emptyHotkeys)
+        let emptyOutput = try #require(String(data: emptyData, encoding: .utf8))
+        let fallbackConfig = try emptyOutput.removingKey("animationsEnabled")
+        let decodedEmpty = try SettingsTOMLCodec.decode(Data(fallbackConfig.utf8))
+
+        #expect(decodedEmpty.hotkeyBindings == [])
+    }
+
+    @Test func recoveryStillRejectsInvalidPresentValues() throws {
+        let data = try SettingsTOMLCodec.encode(SettingsExport.defaults())
+        let output = try #require(String(data: data, encoding: .utf8))
+        let missingKeyConfig = try output.removingKey("animationsEnabled")
+        let decodedMissingKeyConfig = try SettingsTOMLCodec.decode(Data(missingKeyConfig.utf8))
+        let invalidType = try missingKeyConfig.replacingRegex(
+            "^hotkeysEnabled = true$",
+            with: "hotkeysEnabled = \"true\""
+        )
+
+        #expect(decodedMissingKeyConfig.animationsEnabled == SettingsExport.defaults().animationsEnabled)
+
+        #expect(throws: (any Error).self) {
+            _ = try SettingsTOMLCodec.decode(Data(invalidType.utf8))
+        }
+    }
+
+    @Test func recoveryStillRejectsIncompletePresentOptionalTables() throws {
+        let data = try SettingsTOMLCodec.encode(SettingsExport.defaults())
+        let output = try #require(String(data: data, encoding: .utf8))
+        let edited = try output.removingKey("animationsEnabled") + """
+
+        [quakeTerminal.customFrame]
+        x = 10.0
+        y = 20.0
+        width = 30.0
+        """
+
+        #expect(throws: (any Error).self) {
+            _ = try SettingsTOMLCodec.decode(Data(edited.utf8))
+        }
     }
 
     @Test func encodeProducesSectionedToml() throws {
