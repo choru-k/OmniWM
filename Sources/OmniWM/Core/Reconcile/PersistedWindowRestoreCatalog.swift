@@ -1,7 +1,7 @@
 import CoreGraphics
 import Foundation
 
-struct PersistedRestoreIntent: Codable, Equatable {
+struct PersistedRestoreIntent: Codable, Equatable, Sendable {
     let workspaceName: String
     let topologyProfile: TopologyProfile
     let preferredMonitor: DisplayFingerprint?
@@ -11,7 +11,7 @@ struct PersistedRestoreIntent: Codable, Equatable {
     let rescueEligible: Bool
 }
 
-struct PersistedWindowRestoreBaseKey: Codable, Equatable, Hashable {
+struct PersistedWindowRestoreBaseKey: Codable, Equatable, Hashable, Sendable {
     let bundleId: String
     let role: String?
     let subrole: String?
@@ -63,7 +63,7 @@ struct PersistedWindowRestoreBaseKey: Codable, Equatable, Hashable {
     }
 }
 
-struct PersistedWindowRestoreKey: Codable, Equatable, Hashable {
+struct PersistedWindowRestoreKey: Codable, Equatable, Hashable, Sendable {
     let baseKey: PersistedWindowRestoreBaseKey
     let title: String?
 
@@ -94,12 +94,12 @@ struct PersistedWindowRestoreKey: Codable, Equatable, Hashable {
     }
 }
 
-struct PersistedWindowRestoreEntry: Codable, Equatable {
+struct PersistedWindowRestoreEntry: Codable, Equatable, Sendable {
     let key: PersistedWindowRestoreKey
     let restoreIntent: PersistedRestoreIntent
 }
 
-struct PersistedWindowRestoreCatalog: Codable, Equatable {
+struct PersistedWindowRestoreCatalog: Codable, Equatable, Sendable {
     var entries: [PersistedWindowRestoreEntry]
 
     static let empty = PersistedWindowRestoreCatalog(entries: [])

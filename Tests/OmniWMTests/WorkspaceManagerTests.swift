@@ -425,9 +425,113 @@ private func workspaceConfigurations(
 
         #expect(settings.loadPersistedWindowRestoreCatalog() == .empty)
     }
+
+    @Test func persistedCatalogUsesCurrentTopologyAfterMonitorChange() throws {
+        let defaults = makeWorkspaceManagerTestDefaults()
+        let settings = SettingsStore(defaults: defaults)
+        settings.workspaceConfigurations = workspaceConfigurations([
+            ("1", .main)
+        ])
+
+        let manager = WorkspaceManager(settings: settings)
+        let firstMonitor = makeWorkspaceManagerTestMonitor(displayId: 460, name: "First", x: 0, y: 0)
+        manager.applyMonitorConfigurationChange([firstMonitor])
+
+        let workspaceId = try #require(manager.workspaceId(for: "1", createIfMissing: true))
+        let token = manager.addWindow(
+            makeWorkspaceManagerTestWindow(windowId: 4601),
+            pid: 4601,
+            windowId: 4601,
+            to: workspaceId
+        )
+        _ = manager.setManagedReplacementMetadata(
+            makeWorkspaceManagerReplacementMetadata(
+                workspaceId: workspaceId,
+                title: "Topology Refresh"
+            ),
+            for: token
+        )
+        manager.flushPersistedWindowRestoreCatalogNow()
+        let initialEntry = try #require(settings.loadPersistedWindowRestoreCatalog().entries.first)
+        #expect(initialEntry.restoreIntent.topologyProfile == TopologyProfile(monitors: [firstMonitor]))
+
+        let secondMonitor = makeWorkspaceManagerTestMonitor(displayId: 461, name: "Second", x: 0, y: 0)
+        manager.applyMonitorConfigurationChange([secondMonitor])
+        manager.flushPersistedWindowRestoreCatalogNow()
+
+        let refreshedEntry = try #require(settings.loadPersistedWindowRestoreCatalog().entries.first)
+        #expect(refreshedEntry.restoreIntent.topologyProfile == TopologyProfile(monitors: [secondMonitor]))
+    }
+
+    @Test func persistedCatalogUsesLatestFloatingGeometryOnExplicitFlush() throws {
+        let defaults = makeWorkspaceManagerTestDefaults()
+        let settings = SettingsStore(defaults: defaults)
+        settings.workspaceConfigurations = workspaceConfigurations([
+            ("1", .main)
+        ])
+
+        let manager = WorkspaceManager(settings: settings)
+        let monitor = makeWorkspaceManagerTestMonitor(displayId: 470, name: "Main", x: 0, y: 0)
+        manager.applyMonitorConfigurationChange([monitor])
+
+        let workspaceId = try #require(manager.workspaceId(for: "1", createIfMissing: true))
+        let token = manager.addWindow(
+            makeWorkspaceManagerTestWindow(windowId: 4701),
+            pid: 4701,
+            windowId: 4701,
+            to: workspaceId,
+            mode: .floating
+        )
+        _ = manager.setManagedReplacementMetadata(
+            makeWorkspaceManagerReplacementMetadata(
+                workspaceId: workspaceId,
+                mode: .floating,
+                title: "Floating Update"
+            ),
+            for: token
+        )
+
+        let firstFrame = CGRect(x: 40, y: 50, width: 300, height: 220)
+        manager.updateFloatingGeometry(frame: firstFrame, for: token, referenceMonitor: monitor)
+        manager.flushPersistedWindowRestoreCatalogNow()
+        let initialEntry = try #require(settings.loadPersistedWindowRestoreCatalog().entries.first)
+        #expect(initialEntry.restoreIntent.floatingFrame == firstFrame)
+
+        let secondFrame = CGRect(x: 120, y: 140, width: 420, height: 280)
+        manager.updateFloatingGeometry(frame: secondFrame, for: token, referenceMonitor: monitor)
+        manager.flushPersistedWindowRestoreCatalogNow()
+        let refreshedEntry = try #require(settings.loadPersistedWindowRestoreCatalog().entries.first)
+        #expect(refreshedEntry.restoreIntent.floatingFrame == secondFrame)
+    }
+
 }
 
 @Suite struct WorkspaceManagerTests {
+    @Test @MainActor func applySettingsUsesUpdatedWorkspaceMonitorAssignments() throws {
+        let defaults = makeWorkspaceManagerTestDefaults()
+        let settings = SettingsStore(defaults: defaults)
+        settings.workspaceConfigurations = workspaceConfigurations([
+            ("1", .main),
+            ("2", .secondary)
+        ])
+
+        let manager = WorkspaceManager(settings: settings)
+        let left = makeWorkspaceManagerTestMonitor(displayId: 480, name: "Left", x: 0, y: 0)
+        let right = makeWorkspaceManagerTestMonitor(displayId: 481, name: "Right", x: 1920, y: 0)
+        manager.applyMonitorConfigurationChange([left, right])
+
+        let workspace2 = try #require(manager.workspaceId(for: "2", createIfMissing: true))
+        #expect(manager.monitor(for: workspace2)?.id == right.id)
+
+        settings.workspaceConfigurations = workspaceConfigurations([
+            ("1", .main),
+            ("2", .main)
+        ])
+        manager.applySettings()
+
+        #expect(manager.monitor(for: workspace2)?.id == left.id)
+    }
+
     @Test @MainActor func equalDistanceRemapUsesDeterministicTieBreak() {
         let defaults = makeWorkspaceManagerTestDefaults()
         let settings = SettingsStore(defaults: defaults)

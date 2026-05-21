@@ -746,14 +746,6 @@ final class SettingsStore {
         workspaceConfigurations.map(\.name)
     }
 
-    func workspaceToMonitorAssignments() -> [String: [MonitorDescription]] {
-        var result: [String: [MonitorDescription]] = [:]
-        for config in workspaceConfigurations {
-            result[config.name] = [config.monitorAssignment.toMonitorDescription()]
-        }
-        return result
-    }
-
     func layoutType(for workspaceName: String) -> LayoutType {
         if let config = workspaceConfigurations.first(where: { $0.name == workspaceName }) {
             if config.layoutType == .defaultLayout {

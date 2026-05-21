@@ -15,6 +15,82 @@ struct WorkspaceDescriptor: Identifiable, Hashable {
     }
 }
 
+private struct PersistedWindowRestoreCatalogBuildSnapshot: Sendable {
+    let entries: [PersistedWindowRestoreCatalogBuildEntry]
+}
+
+private struct PersistedWindowRestoreCatalogBuildEntry: Sendable {
+    let metadata: ManagedReplacementMetadata
+    let workspaceName: String
+    let topologyProfile: TopologyProfile
+    let preferredMonitor: DisplayFingerprint?
+    let floatingFrame: CGRect?
+    let normalizedFloatingOrigin: CGPoint?
+    let restoreToFloating: Bool
+    let rescueEligible: Bool
+}
+
+private enum PersistedWindowRestoreCatalogBuilder {
+    private struct Candidate {
+        let key: PersistedWindowRestoreKey
+        let entry: PersistedWindowRestoreEntry
+    }
+
+    static func build(from snapshot: PersistedWindowRestoreCatalogBuildSnapshot) -> PersistedWindowRestoreCatalog {
+        var candidatesByBaseKey: [PersistedWindowRestoreBaseKey: [Candidate]] = [:]
+
+        for snapshotEntry in snapshot.entries {
+            guard let key = PersistedWindowRestoreKey(metadata: snapshotEntry.metadata) else { continue }
+            let persistedEntry = PersistedWindowRestoreEntry(
+                key: key,
+                restoreIntent: PersistedRestoreIntent(
+                    workspaceName: snapshotEntry.workspaceName,
+                    topologyProfile: snapshotEntry.topologyProfile,
+                    preferredMonitor: snapshotEntry.preferredMonitor,
+                    floatingFrame: snapshotEntry.floatingFrame,
+                    normalizedFloatingOrigin: snapshotEntry.normalizedFloatingOrigin,
+                    restoreToFloating: snapshotEntry.restoreToFloating,
+                    rescueEligible: snapshotEntry.rescueEligible
+                )
+            )
+            candidatesByBaseKey[key.baseKey, default: []].append(
+                Candidate(key: key, entry: persistedEntry)
+            )
+        }
+
+        var persistedEntries: [PersistedWindowRestoreEntry] = []
+        persistedEntries.reserveCapacity(candidatesByBaseKey.count)
+
+        for candidates in candidatesByBaseKey.values {
+            if candidates.count == 1, let candidate = candidates.first {
+                persistedEntries.append(candidate.entry)
+                continue
+            }
+
+            let candidatesByTitle = Dictionary(grouping: candidates, by: { $0.key.title })
+            for (title, titledCandidates) in candidatesByTitle where title != nil && titledCandidates.count == 1 {
+                if let candidate = titledCandidates.first {
+                    persistedEntries.append(candidate.entry)
+                }
+            }
+        }
+
+        persistedEntries.sort { lhs, rhs in
+            let lhsWorkspace = lhs.restoreIntent.workspaceName
+            let rhsWorkspace = rhs.restoreIntent.workspaceName
+            if lhsWorkspace != rhsWorkspace {
+                return lhsWorkspace < rhsWorkspace
+            }
+            if lhs.key.baseKey.bundleId != rhs.key.baseKey.bundleId {
+                return lhs.key.baseKey.bundleId < rhs.key.baseKey.bundleId
+            }
+            return (lhs.key.title ?? "") < (rhs.key.title ?? "")
+        }
+
+        return PersistedWindowRestoreCatalog(entries: persistedEntries)
+    }
+}
+
 @MainActor
 final class WorkspaceManager {
     static let staleUnavailableNativeFullscreenTimeout: TimeInterval = 15
@@ -79,6 +155,14 @@ final class WorkspaceManager {
         var focus = FocusSession()
     }
 
+    private struct MonitorResolutionContext {
+        let monitors: [Monitor]
+        let sortedMonitors: [Monitor]
+        let topologyProfile: TopologyProfile
+        let configuredWorkspaceNames: Set<String>
+        let monitorDescriptionByWorkspaceName: [String: MonitorDescription]
+    }
+
     private(set) var monitors: [Monitor] = Monitor.current() {
         didSet { rebuildMonitorIndexes() }
     }
@@ -103,7 +187,14 @@ final class WorkspaceManager {
     private var consumedBootPersistedWindowRestoreKeys: Set<PersistedWindowRestoreKey> = []
     private var persistedWindowRestoreCatalogDirty = false
     private var persistedWindowRestoreCatalogSaveScheduled = false
+    private var persistedWindowRestoreCatalogBuildInFlight = false
+    private var persistedWindowRestoreCatalogRevision: UInt64 = 0
 
+    private var _cachedSortedMonitors: [Monitor]?
+    private var _cachedTopologyProfile: TopologyProfile?
+    private var _cachedConfiguredWorkspaceNames: [String]?
+    private var _cachedConfiguredWorkspaceNameSet: Set<String>?
+    private var _cachedMonitorDescriptionByWorkspaceName: [String: MonitorDescription]?
     private var _cachedSortedWorkspaces: [WorkspaceDescriptor]?
     private var _cachedWorkspaceIdsByMonitor: [Monitor.ID: [WorkspaceDescriptor.ID]]?
     private var _cachedVisibleWorkspaceIds: Set<WorkspaceDescriptor.ID>?
@@ -151,7 +242,7 @@ final class WorkspaceManager {
             }
 
         return ReconcileSnapshot(
-            topologyProfile: TopologyProfile(monitors: monitors),
+            topologyProfile: currentTopologyProfile(),
             focusSession: focusSessionSnapshot(),
             windows: windowSnapshots
         )
@@ -234,6 +325,7 @@ final class WorkspaceManager {
     private func recordTopologyChange(to newMonitors: [Monitor]) -> ReconcileTxn {
         let normalizedMonitors = newMonitors.isEmpty ? [Monitor.fallback()] : newMonitors
         let snapshot = reconcileSnapshot()
+        let topologyResolutionContext = monitorResolutionContext(for: normalizedMonitors)
         let topologyPlan = restorePlanner.planMonitorConfigurationChange(
             .init(
                 snapshot: snapshot,
@@ -247,15 +339,23 @@ final class WorkspaceManager {
                     self?.descriptor(for: workspaceId) != nil
                 },
                 homeMonitorId: { [weak self] workspaceId, monitors in
-                    self?.homeMonitor(for: workspaceId, in: monitors)?.id
+                    guard let self else { return nil }
+                    let context = monitors == topologyResolutionContext.monitors
+                        ? topologyResolutionContext
+                        : self.monitorResolutionContext(for: monitors)
+                    return self.homeMonitor(for: workspaceId, context: context)?.id
                 },
                 effectiveMonitorId: { [weak self] workspaceId, monitors in
-                    self?.effectiveMonitor(for: workspaceId, in: monitors)?.id
+                    guard let self else { return nil }
+                    let context = monitors == topologyResolutionContext.monitors
+                        ? topologyResolutionContext
+                        : self.monitorResolutionContext(for: monitors)
+                    return self.effectiveMonitor(for: workspaceId, context: context)?.id
                 }
             )
         )
         let event = WMEvent.topologyChanged(
-            displays: Monitor.sortedByPosition(normalizedMonitors).map(DisplayFingerprint.init),
+            displays: topologyResolutionContext.topologyProfile.displays,
             source: .workspaceManager
         )
 
@@ -397,15 +497,17 @@ final class WorkspaceManager {
 
     private func applyTopologyTransition(_ transition: TopologyTransitionPlan) {
         replaceMonitorsForTopologyTransition(with: transition.newMonitors)
+        let context = monitorResolutionContext()
 
-        for monitor in Monitor.sortedByPosition(monitors) {
+        for monitor in context.sortedMonitors {
             guard let workspaceId = transition.visibleAssignments[monitor.id] else { continue }
             _ = setActiveWorkspaceInternal(
                 workspaceId,
                 on: monitor.id,
                 anchorPoint: monitor.workspaceAnchorPoint,
                 updateInteractionMonitor: false,
-                notify: false
+                notify: false,
+                context: context
             )
         }
 
@@ -432,8 +534,9 @@ final class WorkspaceManager {
     }
 
     private func refreshWindowMonitorReferencesForAllEntries() {
+        let context = monitorResolutionContext()
         for entry in windows.allEntries() {
-            let currentMonitorId = monitorId(for: entry.workspaceId)
+            let currentMonitorId = monitorId(for: entry.workspaceId, context: context)
             if entry.observedState.monitorId != currentMonitorId {
                 var observedState = entry.observedState
                 observedState.monitorId = currentMonitorId
@@ -581,8 +684,8 @@ final class WorkspaceManager {
     }
 
     func flushPersistedWindowRestoreCatalogNow() {
-        persistedWindowRestoreCatalogDirty = true
-        flushPersistedWindowRestoreCatalogIfNeeded()
+        markPersistedWindowRestoreCatalogDirty()
+        flushPersistedWindowRestoreCatalogSynchronously()
     }
 
     func persistedWindowRestoreCatalogForTests() -> PersistedWindowRestoreCatalog {
@@ -598,100 +701,99 @@ final class WorkspaceManager {
     }
 
     private func schedulePersistedWindowRestoreCatalogSave() {
+        markPersistedWindowRestoreCatalogDirty()
+        enqueuePersistedWindowRestoreCatalogSave()
+    }
+
+    private func markPersistedWindowRestoreCatalogDirty() {
         persistedWindowRestoreCatalogDirty = true
-        guard !persistedWindowRestoreCatalogSaveScheduled else { return }
+        persistedWindowRestoreCatalogRevision &+= 1
+    }
+
+    private func enqueuePersistedWindowRestoreCatalogSave() {
+        guard !persistedWindowRestoreCatalogSaveScheduled,
+              !persistedWindowRestoreCatalogBuildInFlight
+        else { return }
         persistedWindowRestoreCatalogSaveScheduled = true
 
         Task { @MainActor [weak self] in
-            await Task.yield()
+            try? await Task.sleep(nanoseconds: 75_000_000)
             guard let self else { return }
             self.persistedWindowRestoreCatalogSaveScheduled = false
-            self.flushPersistedWindowRestoreCatalogIfNeeded()
+            self.startPersistedWindowRestoreCatalogBuildIfNeeded()
         }
     }
 
-    private func flushPersistedWindowRestoreCatalogIfNeeded() {
+    private func startPersistedWindowRestoreCatalogBuildIfNeeded() {
+        guard persistedWindowRestoreCatalogDirty else { return }
+        persistedWindowRestoreCatalogDirty = false
+        persistedWindowRestoreCatalogBuildInFlight = true
+        let revision = persistedWindowRestoreCatalogRevision
+        let snapshot = persistedWindowRestoreCatalogBuildSnapshot()
+
+        Task { [weak self] in
+            let catalog = await Task.detached(priority: .utility) {
+                PersistedWindowRestoreCatalogBuilder.build(from: snapshot)
+            }.value
+            self?.completePersistedWindowRestoreCatalogBuild(catalog, revision: revision)
+        }
+    }
+
+    private func completePersistedWindowRestoreCatalogBuild(
+        _ catalog: PersistedWindowRestoreCatalog,
+        revision: UInt64
+    ) {
+        persistedWindowRestoreCatalogBuildInFlight = false
+        if revision == persistedWindowRestoreCatalogRevision, !persistedWindowRestoreCatalogDirty {
+            settings.savePersistedWindowRestoreCatalog(catalog)
+            return
+        }
+        if persistedWindowRestoreCatalogDirty {
+            enqueuePersistedWindowRestoreCatalogSave()
+        }
+    }
+
+    private func flushPersistedWindowRestoreCatalogSynchronously() {
         guard persistedWindowRestoreCatalogDirty else { return }
         persistedWindowRestoreCatalogDirty = false
         settings.savePersistedWindowRestoreCatalog(buildPersistedWindowRestoreCatalog())
     }
 
     private func buildPersistedWindowRestoreCatalog() -> PersistedWindowRestoreCatalog {
-        struct Candidate {
-            let key: PersistedWindowRestoreKey
-            let entry: PersistedWindowRestoreEntry
-        }
+        PersistedWindowRestoreCatalogBuilder.build(from: persistedWindowRestoreCatalogBuildSnapshot())
+    }
 
-        var candidatesByBaseKey: [PersistedWindowRestoreBaseKey: [Candidate]] = [:]
+    private func persistedWindowRestoreCatalogBuildSnapshot() -> PersistedWindowRestoreCatalogBuildSnapshot {
+        let context = monitorResolutionContext()
+        let topologyProfile = context.topologyProfile
+        var snapshotEntries: [PersistedWindowRestoreCatalogBuildEntry] = []
 
         for entry in windows.allEntries() {
             guard let metadata = entry.managedReplacementMetadata,
-                  let key = PersistedWindowRestoreKey(metadata: metadata),
-                  let persistedRestoreIntent = persistedRestoreIntent(for: entry)
+                  let restoreIntent = entry.restoreIntent,
+                  let workspaceName = descriptor(for: entry.workspaceId)?.name
             else {
                 continue
             }
 
-            let persistedEntry = PersistedWindowRestoreEntry(
-                key: key,
-                restoreIntent: persistedRestoreIntent
+            let preferredMonitor = monitor(for: entry.workspaceId, context: context).map(DisplayFingerprint.init)
+                ?? restoreIntent.preferredMonitor
+
+            snapshotEntries.append(
+                PersistedWindowRestoreCatalogBuildEntry(
+                    metadata: metadata,
+                    workspaceName: workspaceName,
+                    topologyProfile: topologyProfile,
+                    preferredMonitor: preferredMonitor,
+                    floatingFrame: restoreIntent.floatingFrame,
+                    normalizedFloatingOrigin: restoreIntent.normalizedFloatingOrigin,
+                    restoreToFloating: restoreIntent.restoreToFloating,
+                    rescueEligible: restoreIntent.rescueEligible
+                )
             )
-            candidatesByBaseKey[key.baseKey, default: []].append(
-                Candidate(key: key, entry: persistedEntry)
-            )
         }
 
-        var persistedEntries: [PersistedWindowRestoreEntry] = []
-        persistedEntries.reserveCapacity(candidatesByBaseKey.count)
-
-        for candidates in candidatesByBaseKey.values {
-            if candidates.count == 1, let candidate = candidates.first {
-                persistedEntries.append(candidate.entry)
-                continue
-            }
-
-            let candidatesByTitle = Dictionary(grouping: candidates, by: { $0.key.title })
-            for (title, titledCandidates) in candidatesByTitle where title != nil && titledCandidates.count == 1 {
-                if let candidate = titledCandidates.first {
-                    persistedEntries.append(candidate.entry)
-                }
-            }
-        }
-
-        persistedEntries.sort { lhs, rhs in
-            let lhsWorkspace = lhs.restoreIntent.workspaceName
-            let rhsWorkspace = rhs.restoreIntent.workspaceName
-            if lhsWorkspace != rhsWorkspace {
-                return lhsWorkspace < rhsWorkspace
-            }
-            if lhs.key.baseKey.bundleId != rhs.key.baseKey.bundleId {
-                return lhs.key.baseKey.bundleId < rhs.key.baseKey.bundleId
-            }
-            return (lhs.key.title ?? "") < (rhs.key.title ?? "")
-        }
-
-        return PersistedWindowRestoreCatalog(entries: persistedEntries)
-    }
-
-    private func persistedRestoreIntent(for entry: WindowModel.Entry) -> PersistedRestoreIntent? {
-        guard let restoreIntent = entry.restoreIntent,
-              let workspaceName = descriptor(for: entry.workspaceId)?.name
-        else {
-            return nil
-        }
-
-        let preferredMonitor = monitor(for: entry.workspaceId).map(DisplayFingerprint.init)
-            ?? restoreIntent.preferredMonitor
-
-        return PersistedRestoreIntent(
-            workspaceName: workspaceName,
-            topologyProfile: TopologyProfile(monitors: monitors),
-            preferredMonitor: preferredMonitor,
-            floatingFrame: restoreIntent.floatingFrame,
-            normalizedFloatingOrigin: restoreIntent.normalizedFloatingOrigin,
-            restoreToFloating: restoreIntent.restoreToFloating,
-            rescueEligible: restoreIntent.rescueEligible
-        )
+        return PersistedWindowRestoreCatalogBuildSnapshot(entries: snapshotEntries)
     }
 
     func monitor(byId id: Monitor.ID) -> Monitor? {
@@ -1776,6 +1878,8 @@ final class WorkspaceManager {
     }
 
     private func rebuildMonitorIndexes() {
+        _cachedSortedMonitors = nil
+        _cachedTopologyProfile = nil
         _monitorsById = Dictionary(uniqueKeysWithValues: monitors.map { ($0.id, $0) })
         var byName: [String: [Monitor]] = [:]
         for monitor in monitors {
@@ -1788,6 +1892,12 @@ final class WorkspaceManager {
         invalidateWorkspaceProjectionCaches()
     }
 
+    private func invalidateSettingsProjectionCaches() {
+        _cachedConfiguredWorkspaceNames = nil
+        _cachedConfiguredWorkspaceNameSet = nil
+        _cachedMonitorDescriptionByWorkspaceName = nil
+    }
+
     private func invalidateWorkspaceProjectionCaches() {
         _cachedWorkspaceIdsByMonitor = nil
         _cachedVisibleWorkspaceIds = nil
@@ -1795,14 +1905,87 @@ final class WorkspaceManager {
         _cachedMonitorIdByVisibleWorkspace = nil
     }
 
+    private func sortedMonitors() -> [Monitor] {
+        if let cached = _cachedSortedMonitors {
+            return cached
+        }
+        let sorted = Monitor.sortedByPosition(monitors)
+        _cachedSortedMonitors = sorted
+        return sorted
+    }
+
+    private func currentTopologyProfile() -> TopologyProfile {
+        if let cached = _cachedTopologyProfile {
+            return cached
+        }
+        let profile = TopologyProfile(sortedMonitors: sortedMonitors())
+        _cachedTopologyProfile = profile
+        return profile
+    }
+
+    private func configuredWorkspaceNames() -> [String] {
+        if let cached = _cachedConfiguredWorkspaceNames {
+            return cached
+        }
+        let names = settings.configuredWorkspaceNames()
+        _cachedConfiguredWorkspaceNames = names
+        return names
+    }
+
+    private func configuredWorkspaceNameSet() -> Set<String> {
+        if let cached = _cachedConfiguredWorkspaceNameSet {
+            return cached
+        }
+        let names = Set(configuredWorkspaceNames())
+        _cachedConfiguredWorkspaceNameSet = names
+        return names
+    }
+
+    private func monitorDescriptionByWorkspaceName() -> [String: MonitorDescription] {
+        if let cached = _cachedMonitorDescriptionByWorkspaceName {
+            return cached
+        }
+        var descriptions: [String: MonitorDescription] = [:]
+        for configuration in settings.workspaceConfigurations {
+            descriptions[configuration.name] = configuration.monitorAssignment.toMonitorDescription()
+        }
+        _cachedMonitorDescriptionByWorkspaceName = descriptions
+        return descriptions
+    }
+
+    private func monitorResolutionContext() -> MonitorResolutionContext {
+        MonitorResolutionContext(
+            monitors: monitors,
+            sortedMonitors: sortedMonitors(),
+            topologyProfile: currentTopologyProfile(),
+            configuredWorkspaceNames: configuredWorkspaceNameSet(),
+            monitorDescriptionByWorkspaceName: monitorDescriptionByWorkspaceName()
+        )
+    }
+
+    private func monitorResolutionContext(for monitors: [Monitor]) -> MonitorResolutionContext {
+        if monitors == self.monitors {
+            return monitorResolutionContext()
+        }
+        let sortedMonitors = Monitor.sortedByPosition(monitors)
+        return MonitorResolutionContext(
+            monitors: monitors,
+            sortedMonitors: sortedMonitors,
+            topologyProfile: TopologyProfile(sortedMonitors: sortedMonitors),
+            configuredWorkspaceNames: configuredWorkspaceNameSet(),
+            monitorDescriptionByWorkspaceName: monitorDescriptionByWorkspaceName()
+        )
+    }
+
     private func workspaceIdsByMonitor() -> [Monitor.ID: [WorkspaceDescriptor.ID]] {
         if let cached = _cachedWorkspaceIdsByMonitor {
             return cached
         }
 
+        let context = monitorResolutionContext()
         var workspaceIdsByMonitor: [Monitor.ID: [WorkspaceDescriptor.ID]] = [:]
         for workspace in sortedWorkspaces() {
-            guard let monitorId = resolvedWorkspaceMonitorId(for: workspace.id) else { continue }
+            guard let monitorId = resolvedWorkspaceMonitorId(for: workspace.id, context: context) else { continue }
             workspaceIdsByMonitor[monitorId, default: []].append(workspace.id)
         }
 
@@ -1837,7 +2020,7 @@ final class WorkspaceManager {
             return existing
         }
         guard createIfMissing else { return nil }
-        guard configuredWorkspaceNames().contains(name) else { return nil }
+        guard configuredWorkspaceNameSet().contains(name) else { return nil }
         return createWorkspace(named: name)
     }
 
@@ -1934,6 +2117,8 @@ final class WorkspaceManager {
     }
 
     func applySettings() {
+        invalidateSettingsProjectionCaches()
+        invalidateWorkspaceProjectionCaches()
         synchronizeConfiguredWorkspaces()
         ensureVisibleWorkspaces()
         reconcileConfiguredVisibleWorkspaces()
@@ -1977,8 +2162,23 @@ final class WorkspaceManager {
         monitorForWorkspace(workspaceId)
     }
 
+    private func monitor(
+        for workspaceId: WorkspaceDescriptor.ID,
+        context: MonitorResolutionContext
+    ) -> Monitor? {
+        guard let monitorId = workspaceMonitorId(for: workspaceId, context: context) else { return nil }
+        return monitor(byId: monitorId)
+    }
+
     func monitorId(for workspaceId: WorkspaceDescriptor.ID) -> Monitor.ID? {
         monitorForWorkspace(workspaceId)?.id
+    }
+
+    private func monitorId(
+        for workspaceId: WorkspaceDescriptor.ID,
+        context: MonitorResolutionContext
+    ) -> Monitor.ID? {
+        monitor(for: workspaceId, context: context)?.id
     }
 
     @discardableResult
@@ -2691,7 +2891,7 @@ final class WorkspaceManager {
     }
 
     func garbageCollectUnusedWorkspaces(focusedWorkspaceId: WorkspaceDescriptor.ID?) {
-        let configured = Set(configuredWorkspaceNames())
+        let configured = configuredWorkspaceNameSet()
         var toRemove: [WorkspaceDescriptor.ID] = []
         for (id, workspace) in workspacesById {
             if configured.contains(workspace.name) {
@@ -2735,7 +2935,7 @@ final class WorkspaceManager {
     func previousMonitor(from monitorId: Monitor.ID) -> Monitor? {
         guard monitors.count > 1 else { return nil }
 
-        let sorted = Monitor.sortedByPosition(monitors)
+        let sorted = sortedMonitors()
         guard let currentIdx = sorted.firstIndex(where: { $0.id == monitorId }) else { return nil }
 
         let prevIdx = currentIdx > 0 ? currentIdx - 1 : sorted.count - 1
@@ -2745,7 +2945,7 @@ final class WorkspaceManager {
     func nextMonitor(from monitorId: Monitor.ID) -> Monitor? {
         guard monitors.count > 1 else { return nil }
 
-        let sorted = Monitor.sortedByPosition(monitors)
+        let sorted = sortedMonitors()
         guard let currentIdx = sorted.firstIndex(where: { $0.id == monitorId }) else { return nil }
 
         let nextIdx = (currentIdx + 1) % sorted.count
@@ -2859,10 +3059,6 @@ final class WorkspaceManager {
         return sorted
     }
 
-    private func configuredWorkspaceNames() -> [String] {
-        settings.configuredWorkspaceNames()
-    }
-
     private func synchronizeConfiguredWorkspaces() {
         let configuredNames = configuredWorkspaceNames()
         let configuredSet = Set(configuredNames)
@@ -2960,6 +3156,7 @@ final class WorkspaceManager {
 
     private func restoreDisconnectedVisibleWorkspacesToHomeMonitors(monitorsWereAdded: Bool) {
         guard monitorsWereAdded, !disconnectedVisibleWorkspaceCache.isEmpty else { return }
+        let context = monitorResolutionContext()
 
         let sortedCacheEntries = disconnectedVisibleWorkspaceCache.sorted { lhs, rhs in
             restoreKeySortKey(lhs.key) < restoreKeySortKey(rhs.key)
@@ -2968,19 +3165,20 @@ final class WorkspaceManager {
         var reconnectAssignments: [Monitor.ID: WorkspaceDescriptor.ID] = [:]
         for (_, workspaceId) in sortedCacheEntries {
             guard descriptor(for: workspaceId) != nil else { continue }
-            guard let homeMonitor = homeMonitor(for: workspaceId) else { continue }
+            guard let homeMonitor = homeMonitor(for: workspaceId, context: context) else { continue }
             guard reconnectAssignments[homeMonitor.id] == nil else { continue }
             reconnectAssignments[homeMonitor.id] = workspaceId
         }
 
-        for monitor in Monitor.sortedByPosition(monitors) {
+        for monitor in context.sortedMonitors {
             guard let workspaceId = reconnectAssignments[monitor.id] else { continue }
             _ = setActiveWorkspaceInternal(
                 workspaceId,
                 on: monitor.id,
                 anchorPoint: monitor.workspaceAnchorPoint,
                 updateInteractionMonitor: false,
-                notify: false
+                notify: false,
+                context: context
             )
         }
     }
@@ -2989,39 +3187,43 @@ final class WorkspaceManager {
         _ migrations: [DisconnectedVisibleWorkspaceMigration]
     ) {
         guard !migrations.isEmpty else { return }
+        let context = monitorResolutionContext()
 
         var winnerByFallbackMonitorId: [Monitor.ID: DisconnectedVisibleWorkspaceMigration] = [:]
         for migration in migrations {
             guard descriptor(for: migration.workspaceId) != nil else { continue }
-            guard let fallbackMonitor = effectiveMonitor(for: migration.workspaceId) else { continue }
+            guard let fallbackMonitor = effectiveMonitor(for: migration.workspaceId, context: context) else { continue }
             guard winnerByFallbackMonitorId[fallbackMonitor.id] == nil else { continue }
             winnerByFallbackMonitorId[fallbackMonitor.id] = migration
         }
 
-        for monitor in Monitor.sortedByPosition(monitors) {
+        for monitor in context.sortedMonitors {
             guard let migration = winnerByFallbackMonitorId[monitor.id] else { continue }
             _ = setActiveWorkspaceInternal(
                 migration.workspaceId,
                 on: monitor.id,
                 anchorPoint: monitor.workspaceAnchorPoint,
                 updateInteractionMonitor: false,
-                notify: false
+                notify: false,
+                context: context
             )
         }
     }
 
     private func pruneRestoredDisconnectedVisibleWorkspaces() {
+        let context = monitorResolutionContext()
         disconnectedVisibleWorkspaceCache = disconnectedVisibleWorkspaceCache.filter { _, workspaceId in
             guard descriptor(for: workspaceId) != nil else { return false }
-            guard let homeMonitorId = homeMonitorId(for: workspaceId) else { return true }
+            guard let homeMonitorId = homeMonitorId(for: workspaceId, context: context) else { return true }
             return visibleWorkspaceId(on: homeMonitorId) != workspaceId
         }
     }
 
     private func reconcileConfiguredVisibleWorkspaces(notify: Bool = true) {
         var changed = false
+        let context = monitorResolutionContext()
 
-        for monitor in Monitor.sortedByPosition(monitors) {
+        for monitor in context.sortedMonitors {
             let assigned = workspaces(on: monitor.id)
             guard !assigned.isEmpty else {
                 if visibleWorkspaceId(on: monitor.id) != nil || previousVisibleWorkspaceId(on: monitor.id) != nil {
@@ -3045,7 +3247,8 @@ final class WorkspaceManager {
                 defaultWorkspaceId,
                 on: monitor.id,
                 anchorPoint: monitor.workspaceAnchorPoint,
-                notify: false
+                notify: false,
+                context: context
             ) {
                 changed = true
             }
@@ -3068,19 +3271,20 @@ final class WorkspaceManager {
         )
         guard !assignments.isEmpty else { return }
 
-        let sortedMonitors = Monitor.sortedByPosition(monitors)
+        let context = monitorResolutionContext()
         var restoredWorkspaces: Set<WorkspaceDescriptor.ID> = []
 
-        for monitor in sortedMonitors {
+        for monitor in context.sortedMonitors {
             guard let workspaceId = assignments[monitor.id] else { continue }
-            guard workspaceMonitorId(for: workspaceId) == monitor.id else { continue }
+            guard workspaceMonitorId(for: workspaceId, context: context) == monitor.id else { continue }
             guard restoredWorkspaces.insert(workspaceId).inserted else { continue }
             _ = setActiveWorkspaceInternal(
                 workspaceId,
                 on: monitor.id,
                 anchorPoint: monitor.workspaceAnchorPoint,
                 updateInteractionMonitor: false,
-                notify: false
+                notify: false,
+                context: context
             )
         }
     }
@@ -3115,7 +3319,7 @@ final class WorkspaceManager {
         previousMonitorSessions: [Monitor.ID: SessionState.MonitorSession]? = nil,
         notify: Bool = true
     ) {
-        let sortedNewMonitors = Monitor.sortedByPosition(monitors)
+        let context = monitorResolutionContext()
         let oldForward = activeVisibleWorkspaceMap(from: previousMonitorSessions ?? sessionState.monitorSessions)
         var oldMonitorById: [Monitor.ID: Monitor] = [:]
 
@@ -3143,14 +3347,15 @@ final class WorkspaceManager {
         }
         invalidateWorkspaceProjectionCaches()
 
-        for newMonitor in sortedNewMonitors {
+        for newMonitor in context.sortedMonitors {
             if let existingWorkspaceId = restoredAssignments[newMonitor.id],
-               workspaceMonitorId(for: existingWorkspaceId) == newMonitor.id,
+               workspaceMonitorId(for: existingWorkspaceId, context: context) == newMonitor.id,
                setActiveWorkspaceInternal(
                    existingWorkspaceId,
                    on: newMonitor.id,
                    anchorPoint: newMonitor.workspaceAnchorPoint,
-                   notify: false
+                   notify: false,
+                   context: context
                )
             {
                 continue
@@ -3160,7 +3365,8 @@ final class WorkspaceManager {
                     defaultWorkspaceId,
                     on: newMonitor.id,
                     anchorPoint: newMonitor.workspaceAnchorPoint,
-                    notify: false
+                    notify: false,
+                    context: context
                 )
             }
         }
@@ -3200,9 +3406,16 @@ final class WorkspaceManager {
     }
 
     private func resolvedWorkspaceMonitorId(for workspaceId: WorkspaceDescriptor.ID) -> Monitor.ID? {
+        resolvedWorkspaceMonitorId(for: workspaceId, context: monitorResolutionContext())
+    }
+
+    private func resolvedWorkspaceMonitorId(
+        for workspaceId: WorkspaceDescriptor.ID,
+        context: MonitorResolutionContext
+    ) -> Monitor.ID? {
         guard let workspace = descriptor(for: workspaceId) else { return nil }
-        if configuredWorkspaceNames().contains(workspace.name) {
-            return effectiveMonitor(for: workspaceId)?.id
+        if context.configuredWorkspaceNames.contains(workspace.name) {
+            return effectiveMonitor(for: workspaceId, context: context)?.id
         }
         return monitorIdShowingWorkspace(workspaceId)
     }
@@ -3211,45 +3424,64 @@ final class WorkspaceManager {
         resolvedWorkspaceMonitorId(for: workspaceId)
     }
 
-    private func configuredMonitorDescriptions(for workspaceName: String) -> [MonitorDescription]? {
-        let assignments = settings.workspaceToMonitorAssignments()
-        guard let descriptions = assignments[workspaceName], !descriptions.isEmpty else { return nil }
-        return descriptions
+    private func workspaceMonitorId(
+        for workspaceId: WorkspaceDescriptor.ID,
+        context: MonitorResolutionContext
+    ) -> Monitor.ID? {
+        resolvedWorkspaceMonitorId(for: workspaceId, context: context)
+    }
+
+    private func configuredMonitorDescription(
+        for workspaceName: String,
+        context: MonitorResolutionContext
+    ) -> MonitorDescription? {
+        context.monitorDescriptionByWorkspaceName[workspaceName]
     }
 
     private func homeMonitor(for workspaceId: WorkspaceDescriptor.ID) -> Monitor? {
-        homeMonitor(for: workspaceId, in: monitors)
+        homeMonitor(for: workspaceId, context: monitorResolutionContext())
     }
 
-    private func homeMonitor(for workspaceId: WorkspaceDescriptor.ID, in monitors: [Monitor]) -> Monitor? {
+    private func homeMonitor(
+        for workspaceId: WorkspaceDescriptor.ID,
+        context: MonitorResolutionContext
+    ) -> Monitor? {
         guard let workspace = descriptor(for: workspaceId) else { return nil }
-        guard let descriptions = configuredMonitorDescriptions(for: workspace.name) else { return nil }
-        let sorted = Monitor.sortedByPosition(monitors)
-        return descriptions.compactMap { $0.resolveMonitor(sortedMonitors: sorted) }.first
+        guard let description = configuredMonitorDescription(for: workspace.name, context: context) else { return nil }
+        return description.resolveMonitor(sortedMonitors: context.sortedMonitors)
     }
 
     private func homeMonitorId(for workspaceId: WorkspaceDescriptor.ID) -> Monitor.ID? {
-        homeMonitor(for: workspaceId)?.id
+        homeMonitorId(for: workspaceId, context: monitorResolutionContext())
+    }
+
+    private func homeMonitorId(
+        for workspaceId: WorkspaceDescriptor.ID,
+        context: MonitorResolutionContext
+    ) -> Monitor.ID? {
+        homeMonitor(for: workspaceId, context: context)?.id
     }
 
     private func effectiveMonitor(for workspaceId: WorkspaceDescriptor.ID) -> Monitor? {
-        effectiveMonitor(for: workspaceId, in: monitors)
+        effectiveMonitor(for: workspaceId, context: monitorResolutionContext())
     }
 
-    private func effectiveMonitor(for workspaceId: WorkspaceDescriptor.ID, in monitors: [Monitor]) -> Monitor? {
-        if let home = homeMonitor(for: workspaceId, in: monitors) {
+    private func effectiveMonitor(
+        for workspaceId: WorkspaceDescriptor.ID,
+        context: MonitorResolutionContext
+    ) -> Monitor? {
+        if let home = homeMonitor(for: workspaceId, context: context) {
             return home
         }
 
-        let sortedMonitors = Monitor.sortedByPosition(monitors)
-        guard !sortedMonitors.isEmpty else { return nil }
+        guard !context.sortedMonitors.isEmpty else { return nil }
         guard let workspace = descriptor(for: workspaceId) else { return nil }
 
         let anchorPoint = workspace.assignedMonitorPoint
             ?? monitorIdShowingWorkspace(workspaceId).flatMap { monitor(byId: $0)?.workspaceAnchorPoint }
-        guard let anchorPoint else { return sortedMonitors.first }
+        guard let anchorPoint else { return context.sortedMonitors.first }
 
-        return sortedMonitors.min { lhs, rhs in
+        return context.sortedMonitors.min { lhs, rhs in
             let lhsDistance = lhs.workspaceAnchorPoint.distanceSquared(to: anchorPoint)
             let rhsDistance = rhs.workspaceAnchorPoint.distanceSquared(to: anchorPoint)
             if lhsDistance != rhsDistance {
@@ -3260,9 +3492,17 @@ final class WorkspaceManager {
     }
 
     private func isValidAssignment(workspaceId: WorkspaceDescriptor.ID, monitorId: Monitor.ID) -> Bool {
+        isValidAssignment(workspaceId: workspaceId, monitorId: monitorId, context: monitorResolutionContext())
+    }
+
+    private func isValidAssignment(
+        workspaceId: WorkspaceDescriptor.ID,
+        monitorId: Monitor.ID,
+        context: MonitorResolutionContext
+    ) -> Bool {
         guard let workspace = descriptor(for: workspaceId) else { return false }
-        guard configuredWorkspaceNames().contains(workspace.name) else { return false }
-        return effectiveMonitor(for: workspaceId)?.id == monitorId
+        guard context.configuredWorkspaceNames.contains(workspace.name) else { return false }
+        return effectiveMonitor(for: workspaceId, context: context)?.id == monitorId
     }
 
     private func setActiveWorkspaceInternal(
@@ -3270,9 +3510,13 @@ final class WorkspaceManager {
         on monitorId: Monitor.ID,
         anchorPoint: CGPoint? = nil,
         updateInteractionMonitor: Bool = false,
-        notify: Bool = true
+        notify: Bool = true,
+        context: MonitorResolutionContext? = nil
     ) -> Bool {
-        guard isValidAssignment(workspaceId: workspaceId, monitorId: monitorId) else { return false }
+        let resolutionContext = context ?? monitorResolutionContext()
+        guard isValidAssignment(workspaceId: workspaceId, monitorId: monitorId, context: resolutionContext) else {
+            return false
+        }
         let effectiveAnchorPoint = anchorPoint ?? monitor(byId: monitorId)?.workspaceAnchorPoint
         var workspaceVisibilityChanged = false
 
@@ -3332,7 +3576,7 @@ final class WorkspaceManager {
 
     private func createWorkspace(named name: String) -> WorkspaceDescriptor.ID? {
         guard let rawID = WorkspaceIDPolicy.normalizeRawID(name) else { return nil }
-        guard configuredWorkspaceNames().contains(rawID) else { return nil }
+        guard configuredWorkspaceNameSet().contains(rawID) else { return nil }
         let workspace = WorkspaceDescriptor(name: rawID)
         workspacesById[workspace.id] = workspace
         workspaceIdByName[workspace.name] = workspace.id

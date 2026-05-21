@@ -75,7 +75,7 @@ struct DesiredWindowState: Equatable {
     }
 }
 
-struct DisplayFingerprint: Hashable, Equatable, Codable {
+struct DisplayFingerprint: Hashable, Equatable, Codable, Sendable {
     let displayId: CGDirectDisplayID
     let name: String
     let anchorPoint: CGPoint
@@ -89,11 +89,15 @@ struct DisplayFingerprint: Hashable, Equatable, Codable {
     }
 }
 
-struct TopologyProfile: Hashable, Equatable, Codable {
+struct TopologyProfile: Hashable, Equatable, Codable, Sendable {
     let displays: [DisplayFingerprint]
 
     init(monitors: [Monitor]) {
-        displays = Monitor.sortedByPosition(monitors).map(DisplayFingerprint.init)
+        self.init(sortedMonitors: Monitor.sortedByPosition(monitors))
+    }
+
+    init(sortedMonitors: [Monitor]) {
+        displays = sortedMonitors.map(DisplayFingerprint.init)
     }
 }
 
