@@ -168,6 +168,19 @@ private func closeOwnedUtilityWindowsForTests() async {
         #expect(registry.contains(point: CGPoint(x: 86, y: 110)) == false)
         #expect(registry.hasVisibleWindow == false)
         #expect(registry.isCaptureEligible(windowNumber: windowNumber) == false)
+        guard let configuration = manager.overlayWindowConfigurationForTests(
+            workspaceId: workspaceId,
+            columnId: columnId
+        ) else {
+            Issue.record("Expected tabbed overlay window configuration")
+            return
+        }
+        #expect(configuration.level == .normal)
+        #expect(configuration.isFloatingPanel == false)
+        #expect(configuration.styleMask.contains(.nonactivatingPanel))
+        #expect(configuration.canBecomeKey == false)
+        #expect(configuration.canBecomeMain == false)
+        #expect(configuration.collectionBehavior == [.managed, .fullScreenAuxiliary])
         #expect(registry.visibleSurfaceIDs(kind: .tabbedColumnOverlay, capturePolicy: .excluded) == [
             "tabbed-column-overlay-\(workspaceId.uuidString)-\(columnId.uuid.uuidString)"
         ])

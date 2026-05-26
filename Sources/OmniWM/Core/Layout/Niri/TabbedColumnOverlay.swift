@@ -369,6 +369,30 @@ final class TabbedColumnOverlayManager {
         overlays[TabbedColumnOverlayKey(workspaceId: workspaceId, columnId: columnId)]?.windowNumber
     }
 
+    func overlayWindowConfigurationForTests(
+        workspaceId: WorkspaceDescriptor.ID,
+        columnId: NodeId
+    ) -> (
+        level: NSWindow.Level,
+        isFloatingPanel: Bool,
+        styleMask: NSWindow.StyleMask,
+        canBecomeKey: Bool,
+        canBecomeMain: Bool,
+        collectionBehavior: NSWindow.CollectionBehavior
+    )? {
+        guard let overlay = overlays[TabbedColumnOverlayKey(workspaceId: workspaceId, columnId: columnId)] else {
+            return nil
+        }
+        return (
+            overlay.level,
+            overlay.isFloatingPanel,
+            overlay.styleMask,
+            overlay.canBecomeKey,
+            overlay.canBecomeMain,
+            overlay.collectionBehavior
+        )
+    }
+
     func overlayAccessibilitySnapshotForTests(
         workspaceId: WorkspaceDescriptor.ID,
         columnId: NodeId
@@ -429,14 +453,14 @@ private final class TabbedColumnOverlayWindow: NSPanel {
             defer: false
         )
 
-        isFloatingPanel = true
+        isFloatingPanel = false
         isOpaque = false
         backgroundColor = .clear
-        level = .floating
+        level = .normal
         ignoresMouseEvents = false
         hasShadow = false
         hidesOnDeactivate = false
-        collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
+        collectionBehavior = [.managed, .fullScreenAuxiliary]
         titleVisibility = .hidden
         titlebarAppearsTransparent = true
         isMovableByWindowBackground = false
