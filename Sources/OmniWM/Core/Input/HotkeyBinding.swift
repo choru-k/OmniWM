@@ -43,10 +43,6 @@ struct KeyBinding: Equatable, Hashable {
 
     func carbonCompatibilityBinding(for hyperTrigger: HyperKeyTrigger) -> KeyBinding? {
         guard usesHyper, !isUnassigned else { return nil }
-        if let modifier = hyperTrigger.carbonCompatibilityModifierMask {
-            guard modifiers & modifier == 0 else { return nil }
-            return KeyBinding(keyCode: keyCode, modifiers: modifiers | modifier)
-        }
         guard hyperTrigger == .system, modifiers == 0 else { return nil }
         return KeyBinding(keyCode: keyCode, modifiers: KeySymbolMapper.hyperModifiers)
     }
@@ -88,18 +84,15 @@ extension KeyBinding: Codable {
 
 enum HyperKeyTrigger: Equatable, Hashable {
     case system
-    case modifier(UInt32)
     case key(UInt32)
     case mouseButton(Int64)
 
-    static let `default`: HyperKeyTrigger = .modifier(UInt32(optionKey))
+    static let `default`: HyperKeyTrigger = .key(UInt32(kVK_Option))
 
     var displayString: String {
         switch self {
         case .system:
             return "⌃⌥⇧⌘"
-        case let .modifier(modifier):
-            return KeySymbolMapper.modifierSymbols(modifier)
         case let .key(keyCode):
             return KeySymbolMapper.keySymbol(keyCode)
         case let .mouseButton(button):
@@ -111,8 +104,6 @@ enum HyperKeyTrigger: Equatable, Hashable {
         switch self {
         case .system:
             return "Control+Option+Shift+Command"
-        case let .modifier(modifier):
-            return KeySymbolMapper.modifierNames(modifier)
         case let .key(keyCode):
             return KeySymbolMapper.keyName(keyCode)
         case let .mouseButton(button):
@@ -122,8 +113,7 @@ enum HyperKeyTrigger: Equatable, Hashable {
 
     var requiresEventTap: Bool {
         switch self {
-        case .system,
-             .modifier:
+        case .system:
             return false
         case .key,
              .mouseButton:
@@ -141,21 +131,18 @@ enum HyperKeyTrigger: Equatable, Hashable {
         return button
     }
 
+    var requiresCapsLockRemap: Bool {
+        keyboardKeyCode == UInt32(kVK_CapsLock)
+    }
+
     var modifierMaskToExclude: UInt32 {
         switch self {
         case .system,
              .mouseButton:
             return 0
-        case let .modifier(modifier):
-            return modifier
         case let .key(keyCode):
             return Self.modifierMask(for: keyCode)
         }
-    }
-
-    var carbonCompatibilityModifierMask: UInt32? {
-        guard case let .modifier(modifier) = self else { return nil }
-        return modifier
     }
 
     func matchesPhysicalKeyCode(_ keyCode: UInt32) -> Bool {
@@ -165,8 +152,6 @@ enum HyperKeyTrigger: Equatable, Hashable {
             return false
         case let .key(triggerKeyCode):
             return keyCode == triggerKeyCode
-        case let .modifier(modifier):
-            return Self.modifierMask(for: keyCode) == modifier
         }
     }
 
@@ -186,10 +171,6 @@ enum HyperKeyTrigger: Equatable, Hashable {
            button >= 2
         {
             return .mouseButton(button)
-        }
-
-        if let modifier = Self.modifierMask(named: trimmed) {
-            return .modifier(modifier)
         }
 
         if let keyCode = KeySymbolMapper.keyCode(named: trimmed) {
@@ -214,20 +195,6 @@ enum HyperKeyTrigger: Equatable, Hashable {
         }
     }
 
-    static func modifierMask(named name: String) -> UInt32? {
-        switch name.replacingOccurrences(of: " ", with: "").replacingOccurrences(of: "-", with: "").lowercased() {
-        case "shift":
-            return UInt32(shiftKey)
-        case "control":
-            return UInt32(controlKey)
-        case "option":
-            return UInt32(optionKey)
-        case "command":
-            return UInt32(cmdKey)
-        default:
-            return nil
-        }
-    }
 }
 
 extension HyperKeyTrigger: Codable {

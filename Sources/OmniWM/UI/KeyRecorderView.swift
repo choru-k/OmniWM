@@ -116,13 +116,7 @@ class HyperTriggerRecorderNSView: NSView {
     }
 
     override func flagsChanged(with event: NSEvent) {
-        let keyCode = UInt32(event.keyCode)
-        let modifier = HyperKeyTrigger.modifierMask(for: keyCode)
-        if modifier != 0 {
-            capture(.modifier(modifier))
-        } else {
-            capture(.key(keyCode))
-        }
+        capture(.key(UInt32(event.keyCode)))
     }
 
     override func otherMouseDown(with event: NSEvent) {
@@ -332,15 +326,28 @@ class KeyRecorderNSView: NSView {
     }
 
     private func modifierFlagIsActive(for keyCode: UInt32, event: NSEvent) -> Bool? {
+        guard let mask = modifierMask(for: keyCode) else { return nil }
+        return UInt64(event.modifierFlags.rawValue) & mask != 0
+    }
+
+    private func modifierMask(for keyCode: UInt32) -> UInt64? {
         switch Int(keyCode) {
-        case kVK_Shift, kVK_RightShift:
-            return event.modifierFlags.contains(.shift)
-        case kVK_Control, kVK_RightControl:
-            return event.modifierFlags.contains(.control)
-        case kVK_Option, kVK_RightOption:
-            return event.modifierFlags.contains(.option)
-        case kVK_Command, kVK_RightCommand:
-            return event.modifierFlags.contains(.command)
+        case kVK_Shift:
+            return UInt64(NX_DEVICELSHIFTKEYMASK)
+        case kVK_RightShift:
+            return UInt64(NX_DEVICERSHIFTKEYMASK)
+        case kVK_Control:
+            return UInt64(NX_DEVICELCTLKEYMASK)
+        case kVK_RightControl:
+            return UInt64(NX_DEVICERCTLKEYMASK)
+        case kVK_Option:
+            return UInt64(NX_DEVICELALTKEYMASK)
+        case kVK_RightOption:
+            return UInt64(NX_DEVICERALTKEYMASK)
+        case kVK_Command:
+            return UInt64(NX_DEVICELCMDKEYMASK)
+        case kVK_RightCommand:
+            return UInt64(NX_DEVICERCMDKEYMASK)
         default:
             return nil
         }

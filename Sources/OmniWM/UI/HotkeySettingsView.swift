@@ -511,6 +511,8 @@ private struct HotkeyBindingRow: View {
             return "Failed to register: OmniWM modifier cannot reuse its trigger modifier in the same binding"
         case .eventTapUnavailable:
             return "Failed to register: OmniWM modifier capture is unavailable"
+        case .capsLockRemapUnavailable:
+            return "Failed to register: Caps Lock remapping is unavailable"
         case .systemReserved:
             return "Failed to register: this key combination may be reserved by the system"
         }
