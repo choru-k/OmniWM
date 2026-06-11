@@ -262,6 +262,7 @@ import QuartzCore
         niriHandler.tickScrollAnimation(targetTime: displayLink.targetTimestamp, displayId: displayId)
         dwindleHandler.tickDwindleAnimation(targetTime: displayLink.targetTimestamp, displayId: displayId)
         tickClosingAnimations(targetTime: displayLink.targetTimestamp, displayId: displayId)
+        controller?.surfaceReconciler.reconcileNow()
     }
 
     func startScrollAnimation(for workspaceId: WorkspaceDescriptor.ID) {
@@ -516,6 +517,7 @@ import QuartzCore
             focusRevisionAccepted: focusRevisionAccepted
         )
         acceptedRevision = controller.workspaceManager.runtimeRevision(for: plan.workspaceId)
+        controller.surfaceReconciler.noteWorldChanged()
         return AcceptedRuntimeRevision(
             before: plan.runtimeRevision,
             after: acceptedRevision,

@@ -104,6 +104,8 @@ final class WMController {
     @ObservationIgnored
     private(set) lazy var focusBorderController = FocusBorderController(controller: self)
     @ObservationIgnored
+    private(set) lazy var surfaceReconciler = SurfaceReconciler(controller: self)
+    @ObservationIgnored
     private lazy var workspaceBarManager: WorkspaceBarManager = .init(motionPolicy: motionPolicy)
     @ObservationIgnored
     private var workspaceBarRefreshGeneration: UInt64 = 0
@@ -858,6 +860,7 @@ final class WMController {
     }
 
     private func handleSessionStateChanged() {
+        surfaceReconciler.noteWorldChanged()
         let changeSet = focusNotificationDispatcher.notifyFocusChangesIfNeeded()
         if statusBarRefreshIsEnabled {
             refreshStatusBar()
@@ -882,6 +885,7 @@ final class WMController {
         workspaceId: WorkspaceDescriptor.ID?,
         domains: RuntimeRevisionDomain
     ) {
+        surfaceReconciler.noteWorldChanged()
         guard domains.contains(.workspace) || domains.contains(.fullscreen) else { return }
         guard runtimeFrameJobCancellationSuppressionDepth == 0 else { return }
         cancelPendingFrameJobsForRuntimeRevision(workspaceId: workspaceId)
