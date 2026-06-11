@@ -54,6 +54,12 @@ final class EventInterpreter: EventIntakeSink {
         case let .display(event):
             controller.serviceLifecycleManager.handleDisplayEvent(event)
 
+        case let .hotkeyCommand(command):
+            _ = controller.commandHandler.handleHotkeyCommand(command)
+
+        case let .ipcCommand(intake):
+            intake.completion(intake.perform(controller))
+
         case .systemSleep:
             _ = controller.workspaceManager.recordReconcileEvent(.systemSleep(source: .service))
 

@@ -208,7 +208,10 @@ final class WMController {
         focusPolicyEngine = FocusPolicyEngine()
         workspaceManager.updateAnimationClock(animationClock)
         hotkeys.onCommand = { [weak self] command in
-            self?.commandHandler.handleHotkeyCommand(command)
+            guard let self else { return }
+            if !eventIntake.enqueue(.hotkeyCommand(command)) {
+                _ = commandHandler.handleHotkeyCommand(command)
+            }
         }
         tabbedOverlayManager.onSelect = { [weak self] info, visualIndex, token in
             self?.layoutRefreshController.selectTabInNiri(

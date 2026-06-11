@@ -82,10 +82,8 @@ actor IPCApplicationBridge {
                 }
             }
         case let .command(command):
-            return await MainActor.run {
-                let commandRouter = IPCCommandRouter(controller: controller, sessionToken: sessionToken)
-                return Self.response(for: commandRouter.handle(command), id: request.id, kind: .command)
-            }
+            let result = await commandResult { $0.handle(command) }
+            return Self.response(for: result, id: request.id, kind: .command)
         case let .query(query):
             return await MainActor.run {
                 let queryRouter = IPCQueryRouter(
@@ -101,15 +99,11 @@ actor IPCApplicationBridge {
             }
             return await self.response(for: rule, id: request.id, ruleRouter: ruleRouter)
         case let .workspace(workspace):
-            return await MainActor.run {
-                let commandRouter = IPCCommandRouter(controller: controller, sessionToken: sessionToken)
-                return Self.response(for: commandRouter.handle(workspace), id: request.id, kind: .workspace)
-            }
+            let result = await commandResult { $0.handle(workspace) }
+            return Self.response(for: result, id: request.id, kind: .workspace)
         case let .window(window):
-            return await MainActor.run {
-                let commandRouter = IPCCommandRouter(controller: controller, sessionToken: sessionToken)
-                return Self.response(for: commandRouter.handle(window), id: request.id, kind: .window)
-            }
+            let result = await commandResult { $0.handle(window) }
+            return Self.response(for: result, id: request.id, kind: .window)
         case let .subscribe(subscribe):
             return await MainActor.run {
                 let channels = IPCAutomationManifest.expandedChannels(for: subscribe)
@@ -119,6 +113,27 @@ actor IPCApplicationBridge {
                     status: .subscribed,
                     result: IPCResult(subscribed: IPCSubscribeResult(channels: channels))
                 )
+            }
+        }
+    }
+
+    private func commandResult(
+        _ handle: @escaping @MainActor @Sendable (IPCCommandRouter) -> ExternalCommandResult
+    ) async -> ExternalCommandResult {
+        let controller = controller
+        let sessionToken = sessionToken
+        let perform: @MainActor @Sendable (WMController) -> ExternalCommandResult = { controller in
+            handle(IPCCommandRouter(controller: controller, sessionToken: sessionToken))
+        }
+        return await withCheckedContinuation { continuation in
+            let intake = IPCCommandIntake(
+                perform: perform,
+                completion: { continuation.resume(returning: $0) }
+            )
+            if !EventIntake.post(.ipcCommand(intake)) {
+                Task { @MainActor in
+                    continuation.resume(returning: perform(controller))
+                }
             }
         }
     }

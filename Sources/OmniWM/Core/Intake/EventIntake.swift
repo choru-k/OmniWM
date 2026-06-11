@@ -14,8 +14,15 @@ enum IntakeEvent: Sendable {
     case axWindowMiniaturized(pid: pid_t, windowId: Int)
     case cgs(CGSWindowEvent)
     case display(DisplayConfigurationObserver.DisplayEvent)
+    case hotkeyCommand(HotkeyCommand)
+    case ipcCommand(IPCCommandIntake)
     case systemSleep
     case systemWake
+}
+
+struct IPCCommandIntake: Sendable {
+    let perform: @MainActor @Sendable (WMController) -> ExternalCommandResult
+    let completion: @MainActor @Sendable (ExternalCommandResult) -> Void
 }
 
 struct StampedIntakeEvent: Sendable {
@@ -41,8 +48,9 @@ final class EventIntake {
     private nonisolated let buffer = OSAllocatedUnfairLock(initialState: Buffer())
     private weak var sink: EventIntakeSink?
 
-    nonisolated static func post(_ event: IntakeEvent) {
-        activeIntake.withLock { $0 }?.enqueue(event)
+    @discardableResult
+    nonisolated static func post(_ event: IntakeEvent) -> Bool {
+        activeIntake.withLock { $0 }?.enqueue(event) ?? false
     }
 
     func open(sink: EventIntakeSink) {
@@ -57,19 +65,25 @@ final class EventIntake {
                 active = nil
             }
         }
-        buffer.withLock { state in
+        let dropped = buffer.withLock { state -> [StampedIntakeEvent] in
+            let dropped = state.orderedEvents
             state.isOpen = false
             state.drainScheduled = false
             state.orderedEvents.removeAll(keepingCapacity: false)
             state.pendingCGSFrameWindowIds.removeAll(keepingCapacity: false)
+            return dropped
         }
         sink = nil
+        completeDroppedCommands(dropped)
     }
 
-    nonisolated func enqueue(_ event: IntakeEvent) {
+    @discardableResult
+    nonisolated func enqueue(_ event: IntakeEvent) -> Bool {
+        var didEnqueue = false
         let shouldScheduleDrain = buffer.withLock { state -> Bool in
             guard state.isOpen else { return false }
             stampAndCoalesce(event, into: &state)
+            didEnqueue = true
             guard !state.drainScheduled else { return false }
             state.drainScheduled = true
             return true
@@ -77,10 +91,19 @@ final class EventIntake {
         if shouldScheduleDrain {
             scheduleDrain()
         }
+        return didEnqueue
     }
 
     func drainNow() {
         drainPendingEventsOnMainRunLoop()
+    }
+
+    private func completeDroppedCommands(_ dropped: [StampedIntakeEvent]) {
+        for stamped in dropped {
+            if case let .ipcCommand(intake) = stamped.event {
+                intake.completion(.ignoredDisabled)
+            }
+        }
     }
 
     private nonisolated func stampAndCoalesce(_ event: IntakeEvent, into state: inout Buffer) {
