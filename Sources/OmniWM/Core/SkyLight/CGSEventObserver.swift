@@ -59,8 +59,9 @@ final class CGSEventObserver {
             }
         }
 
-        isRegistered = successCount > 0
-        cgsTransportEnabled.withLock { $0 = isRegistered }
+        let registered = successCount > 0
+        isRegistered = registered
+        cgsTransportEnabled.withLock { $0 = registered }
     }
 
     func stop() {

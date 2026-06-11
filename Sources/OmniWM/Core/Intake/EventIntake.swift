@@ -149,14 +149,12 @@ final class EventIntake {
 
     @discardableResult
     nonisolated func enqueue(_ event: IntakeEvent) -> Bool {
-        var didEnqueue = false
-        let shouldScheduleDrain = buffer.withLock { state -> Bool in
-            guard state.isOpen else { return false }
+        let (didEnqueue, shouldScheduleDrain) = buffer.withLock { state -> (Bool, Bool) in
+            guard state.isOpen else { return (false, false) }
             stampAndCoalesce(event, into: &state)
-            didEnqueue = true
-            guard !state.drainScheduled else { return false }
+            guard !state.drainScheduled else { return (true, false) }
             state.drainScheduled = true
-            return true
+            return (true, true)
         }
         if shouldScheduleDrain {
             scheduleDrain()

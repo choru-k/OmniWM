@@ -45,7 +45,7 @@ final class FactResolver {
             return
         }
         inFlightActivationPids.insert(pid)
-        let thread = AppAXContext.contexts[pid]?.axThread ?? sharedResolverThread()
+        nonisolated(unsafe) let thread = AppAXContext.contexts[pid]?.axThread ?? sharedResolverThread()
         Task { @MainActor in
             let focusedWindow = (try? await thread.runInLoop { _ in
                 Self.readFocusedWindowFact(pid: pid)
