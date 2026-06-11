@@ -2,13 +2,42 @@ import Foundation
 
 typealias IntentID = UInt64
 
+struct ReplacementFocusPayload: Equatable, Sendable {
+    var pid: pid_t
+    let workspaceId: WorkspaceDescriptor.ID
+    var anchorToken: WindowToken
+    var protectedTokens: Set<WindowToken>
+    var isBurstOpen: Bool
+
+    mutating func rekey(from oldToken: WindowToken, to newToken: WindowToken) {
+        if anchorToken == oldToken {
+            anchorToken = newToken
+        }
+        if protectedTokens.remove(oldToken) != nil {
+            protectedTokens.insert(newToken)
+        }
+    }
+
+    func protects(_ token: WindowToken) -> Bool {
+        protectedTokens.contains(token)
+    }
+
+    func suppressesUnrelatedActivation(token: WindowToken, workspaceId: WorkspaceDescriptor.ID) -> Bool {
+        token.pid == pid
+            && workspaceId == self.workspaceId
+            && !protects(token)
+    }
+}
+
 enum IntentKind: Equatable, Sendable {
     case activateApp(pid: pid_t)
     case focusWindow(token: WindowToken, workspaceId: WorkspaceDescriptor.ID)
+    case replacementFocus(ReplacementFocusPayload)
 
     var focusTargetToken: WindowToken? {
         switch self {
-        case .activateApp:
+        case .activateApp,
+             .replacementFocus:
             nil
         case let .focusWindow(token, _):
             token
@@ -16,7 +45,10 @@ enum IntentKind: Equatable, Sendable {
     }
 
     var isFocusWindow: Bool {
-        focusTargetToken != nil
+        if case .focusWindow = self {
+            return true
+        }
+        return false
     }
 
     var targetPid: pid_t {
@@ -25,6 +57,8 @@ enum IntentKind: Equatable, Sendable {
             pid
         case let .focusWindow(token, _):
             token.pid
+        case let .replacementFocus(payload):
+            payload.pid
         }
     }
 }
@@ -214,6 +248,50 @@ final class IntentLedger {
             return entries[index]
         }
         return append(kind: .activateApp(pid: pid), origin: .keyboardOrProgrammatic)
+    }
+
+    @discardableResult
+    func registerReplacementFocus(_ payload: ReplacementFocusPayload) -> Intent {
+        append(kind: .replacementFocus(payload), origin: .keyboardOrProgrammatic)
+    }
+
+    func openReplacementFocusIntent(pid: pid_t, workspaceId: WorkspaceDescriptor.ID) -> Intent? {
+        entries.last { entry in
+            guard entry.phase == .pending,
+                  case let .replacementFocus(payload) = entry.kind
+            else {
+                return false
+            }
+            return payload.pid == pid && payload.workspaceId == workspaceId
+        }
+    }
+
+    func openReplacementFocusIntents(pid: pid_t) -> [Intent] {
+        entries.filter { entry in
+            guard entry.phase == .pending,
+                  case let .replacementFocus(payload) = entry.kind
+            else {
+                return false
+            }
+            return payload.pid == pid
+        }
+    }
+
+    func openReplacementFocusIntents() -> [Intent] {
+        entries.filter { entry in
+            guard entry.phase == .pending, case .replacementFocus = entry.kind else { return false }
+            return true
+        }
+    }
+
+    func updateReplacementFocus(id: IntentID, _ mutate: (inout ReplacementFocusPayload) -> Void) {
+        guard let index = entries.firstIndex(where: { $0.id == id && $0.phase == .pending }),
+              case var .replacementFocus(payload) = entries[index].kind
+        else {
+            return
+        }
+        mutate(&payload)
+        entries[index].kind = .replacementFocus(payload)
     }
 
     func intent(id: IntentID) -> Intent? {

@@ -33,47 +33,6 @@ struct ManagedReplacementFocusKey: Hashable, Equatable {
     let workspaceId: WorkspaceDescriptor.ID
 }
 
-struct ManagedReplacementFocusTransaction: Equatable {
-    let key: ManagedReplacementFocusKey
-    var anchorToken: WindowToken
-    var protectedTokens: Set<WindowToken>
-    var isBurstOpen: Bool
-
-    init(
-        key: ManagedReplacementFocusKey,
-        anchorToken: WindowToken,
-        protectedToken: WindowToken
-    ) {
-        self.key = key
-        self.anchorToken = anchorToken
-        self.protectedTokens = [anchorToken, protectedToken]
-        self.isBurstOpen = true
-    }
-
-    mutating func protect(_ token: WindowToken) {
-        protectedTokens.insert(token)
-    }
-
-    mutating func rekey(from oldToken: WindowToken, to newToken: WindowToken) {
-        if anchorToken == oldToken {
-            anchorToken = newToken
-        }
-        if protectedTokens.remove(oldToken) != nil {
-            protectedTokens.insert(newToken)
-        }
-    }
-
-    func protects(_ token: WindowToken) -> Bool {
-        protectedTokens.contains(token)
-    }
-
-    func suppressesUnrelatedActivation(token: WindowToken, workspaceId: WorkspaceDescriptor.ID) -> Bool {
-        token.pid == key.pid
-            && workspaceId == key.workspaceId
-            && !protects(token)
-    }
-}
-
 enum ActivationCallOrigin: String {
     case external
     case probe
@@ -392,8 +351,6 @@ final class AXEventHandler {
     private var createPlacementContextsByWindowId: [UInt32: WindowCreatePlacementContext] = [:]
     private var pendingManagedReplacementBursts: [ManagedReplacementKey: PendingManagedReplacementBurst] = [:]
     private var pendingManagedReplacementTasks: [ManagedReplacementKey: Task<Void, Never>] = [:]
-    private var managedReplacementFocusTransactions: [ManagedReplacementFocusKey: ManagedReplacementFocusTransaction] =
-        [:]
     private var pendingNativeFullscreenFollowupTasks: [WindowToken: Task<Void, Never>] = [:]
     private var pendingNativeFullscreenStaleCleanupTasks: [WindowToken: Task<Void, Never>] = [:]
     private var pendingWindowRuleReevaluationTask: Task<Void, Never>?
@@ -775,29 +732,38 @@ final class AXEventHandler {
         token: WindowToken,
         workspaceId: WorkspaceDescriptor.ID
     ) {
-        let key = managedReplacementFocusKey(pid: token.pid, workspaceId: workspaceId)
-        if var transaction = managedReplacementFocusTransactions[key] {
-            transaction.isBurstOpen = true
-            transaction.protect(token)
-            managedReplacementFocusTransactions[key] = transaction
+        guard let controller else { return }
+        if let open = controller.intentLedger.openReplacementFocusIntent(pid: token.pid, workspaceId: workspaceId) {
+            controller.intentLedger.updateReplacementFocus(id: open.id) { payload in
+                payload.isBurstOpen = true
+                payload.protectedTokens.insert(token)
+            }
             return
         }
 
+        let key = managedReplacementFocusKey(pid: token.pid, workspaceId: workspaceId)
         guard let anchor = niriManagedFocusAnchor(for: key) else { return }
-        let transaction = ManagedReplacementFocusTransaction(
-            key: key,
-            anchorToken: anchor,
-            protectedToken: token
+        _ = controller.intentLedger.registerReplacementFocus(
+            ReplacementFocusPayload(
+                pid: token.pid,
+                workspaceId: workspaceId,
+                anchorToken: anchor,
+                protectedTokens: [anchor, token],
+                isBurstOpen: true
+            )
         )
-        managedReplacementFocusTransactions[key] = transaction
         cancelSameAppCloseProbe(matchingFocusedToken: anchor, reason: "managed_replacement_focus_transaction")
     }
 
     private func markManagedReplacementFocusBurstClosed(for key: ManagedReplacementKey) {
-        let focusKey = managedReplacementFocusKey(key)
-        guard var transaction = managedReplacementFocusTransactions[focusKey] else { return }
-        transaction.isBurstOpen = false
-        managedReplacementFocusTransactions[focusKey] = transaction
+        guard let controller,
+              let open = controller.intentLedger.openReplacementFocusIntent(pid: key.pid, workspaceId: key.workspaceId)
+        else {
+            return
+        }
+        controller.intentLedger.updateReplacementFocus(id: open.id) { payload in
+            payload.isBurstOpen = false
+        }
     }
 
     private func rekeyManagedReplacementFocusTransaction(
@@ -805,26 +771,28 @@ final class AXEventHandler {
         to newToken: WindowToken,
         workspaceId: WorkspaceDescriptor.ID
     ) {
-        let oldKey = managedReplacementFocusKey(pid: oldToken.pid, workspaceId: workspaceId)
-        guard var transaction = managedReplacementFocusTransactions.removeValue(forKey: oldKey) else { return }
-        transaction.rekey(from: oldToken, to: newToken)
-        let newKey = managedReplacementFocusKey(pid: newToken.pid, workspaceId: workspaceId)
-        let nextTransaction = ManagedReplacementFocusTransaction(
-            key: newKey,
-            anchorToken: transaction.anchorToken,
-            protectedToken: newToken
-        )
-        var mergedTransaction = nextTransaction
-        mergedTransaction.protectedTokens.formUnion(transaction.protectedTokens)
-        mergedTransaction.isBurstOpen = transaction.isBurstOpen
-        managedReplacementFocusTransactions[newKey] = mergedTransaction
+        guard let controller,
+              let open = controller.intentLedger.openReplacementFocusIntent(pid: oldToken.pid, workspaceId: workspaceId)
+        else {
+            return
+        }
+        controller.intentLedger.updateReplacementFocus(id: open.id) { payload in
+            payload.rekey(from: oldToken, to: newToken)
+            payload.protectedTokens.insert(newToken)
+            payload.pid = newToken.pid
+        }
     }
 
     private func clearManagedReplacementFocusTransaction(
         for key: ManagedReplacementFocusKey,
-        reason: String
+        reason _: String
     ) {
-        managedReplacementFocusTransactions.removeValue(forKey: key)
+        guard let controller,
+              let open = controller.intentLedger.openReplacementFocusIntent(pid: key.pid, workspaceId: key.workspaceId)
+        else {
+            return
+        }
+        _ = controller.intentLedger.cancel(id: open.id)
     }
 
     private func clearManagedReplacementFocusTransaction(
@@ -832,31 +800,38 @@ final class AXEventHandler {
         workspaceId: WorkspaceDescriptor.ID,
         reason: String
     ) {
-        let key = managedReplacementFocusKey(pid: token.pid, workspaceId: workspaceId)
-        guard let transaction = managedReplacementFocusTransactions[key],
+        guard let transaction = managedReplacementFocusTransaction(for: token, workspaceId: workspaceId),
               transaction.protects(token)
         else {
             return
         }
-        clearManagedReplacementFocusTransaction(for: key, reason: reason)
+        clearManagedReplacementFocusTransaction(
+            for: managedReplacementFocusKey(pid: token.pid, workspaceId: workspaceId),
+            reason: reason
+        )
     }
 
     private func clearManagedReplacementFocusTransactions(
         pid: pid_t,
-        reason: String
+        reason _: String
     ) {
-        let keys = managedReplacementFocusTransactions.keys.filter { $0.pid == pid }
-        for key in keys {
-            clearManagedReplacementFocusTransaction(for: key, reason: reason)
+        guard let controller else { return }
+        for intent in controller.intentLedger.openReplacementFocusIntents(pid: pid) {
+            _ = controller.intentLedger.cancel(id: intent.id)
         }
     }
 
     private func managedReplacementFocusTransaction(
         for token: WindowToken,
         workspaceId: WorkspaceDescriptor.ID
-    ) -> ManagedReplacementFocusTransaction? {
-        let key = managedReplacementFocusKey(pid: token.pid, workspaceId: workspaceId)
-        return managedReplacementFocusTransactions[key]
+    ) -> ReplacementFocusPayload? {
+        guard let controller,
+              let open = controller.intentLedger.openReplacementFocusIntent(pid: token.pid, workspaceId: workspaceId),
+              case let .replacementFocus(payload) = open.kind
+        else {
+            return nil
+        }
+        return payload
     }
 
     private func isProtectedManagedReplacementFocus(
@@ -870,14 +845,15 @@ final class AXEventHandler {
         token: WindowToken,
         workspaceId: WorkspaceDescriptor.ID
     ) {
-        let key = managedReplacementFocusKey(pid: token.pid, workspaceId: workspaceId)
-        guard let transaction = managedReplacementFocusTransactions[key],
-              transaction.protects(token),
-              !transaction.isBurstOpen
+        guard let controller,
+              let open = controller.intentLedger.openReplacementFocusIntent(pid: token.pid, workspaceId: workspaceId),
+              case let .replacementFocus(payload) = open.kind,
+              payload.protects(token),
+              !payload.isBurstOpen
         else {
             return
         }
-        clearManagedReplacementFocusTransaction(for: key, reason: "protected_activation_accepted")
+        _ = controller.intentLedger.confirm(id: open.id)
     }
 
     private func handleFrameChanged(windowId: UInt32) {
@@ -1615,7 +1591,10 @@ final class AXEventHandler {
         origin: ActivationCallOrigin
     ) -> Bool {
         let key = managedReplacementFocusKey(pid: observedEntry.pid, workspaceId: observedEntry.workspaceId)
-        guard let transaction = managedReplacementFocusTransactions[key] else { return false }
+        guard let transaction = managedReplacementFocusTransaction(
+            for: observedEntry.token,
+            workspaceId: observedEntry.workspaceId
+        ) else { return false }
 
         guard case .unrelatedNoRequest = requestDisposition else {
             if !transaction.protects(observedEntry.token) {
@@ -1819,7 +1798,8 @@ final class AXEventHandler {
         guard let intent = controller.intentLedger.openIntent(id: intentId) else { return }
 
         switch intent.kind {
-        case .activateApp:
+        case .activateApp,
+             .replacementFocus:
             _ = controller.intentLedger.markExpired(id: intentId)
 
         case .focusWindow:
@@ -2890,7 +2870,11 @@ final class AXEventHandler {
         }
         pendingManagedReplacementTasks.removeAll()
         pendingManagedReplacementBursts.removeAll()
-        managedReplacementFocusTransactions.removeAll()
+        if let controller {
+            for intent in controller.intentLedger.openReplacementFocusIntents() {
+                _ = controller.intentLedger.cancel(id: intent.id)
+            }
+        }
         nextManagedReplacementEventSequence = 0
     }
 

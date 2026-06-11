@@ -766,14 +766,15 @@ final class RuntimeArchitectureTests: XCTestCase {
 
     func testManagedReplacementFocusTransactionRekeysAnchorAndProtectedTokens() {
         let workspaceId = WorkspaceDescriptor.ID()
-        let key = ManagedReplacementFocusKey(pid: 77821, workspaceId: workspaceId)
         let oldToken = WindowToken(pid: 77821, windowId: 4245)
         let tempToken = WindowToken(pid: 77821, windowId: 4707)
         let restoredToken = WindowToken(pid: 77821, windowId: 4245)
-        var transaction = ManagedReplacementFocusTransaction(
-            key: key,
+        var transaction = ReplacementFocusPayload(
+            pid: 77821,
+            workspaceId: workspaceId,
             anchorToken: oldToken,
-            protectedToken: tempToken
+            protectedTokens: [oldToken, tempToken],
+            isBurstOpen: true
         )
 
         transaction.rekey(from: oldToken, to: tempToken)
@@ -790,15 +791,16 @@ final class RuntimeArchitectureTests: XCTestCase {
     func testManagedReplacementFocusTransactionSuppressesOnlyUnprotectedSameWorkspaceTokens() {
         let workspaceId = WorkspaceDescriptor.ID()
         let otherWorkspaceId = WorkspaceDescriptor.ID()
-        let key = ManagedReplacementFocusKey(pid: 77821, workspaceId: workspaceId)
         let anchorToken = WindowToken(pid: 77821, windowId: 4245)
         let tempToken = WindowToken(pid: 77821, windowId: 4707)
         let unrelatedSameWorkspaceToken = WindowToken(pid: 77821, windowId: 3164)
         let otherPidToken = WindowToken(pid: 91438, windowId: 3164)
-        let transaction = ManagedReplacementFocusTransaction(
-            key: key,
+        let transaction = ReplacementFocusPayload(
+            pid: 77821,
+            workspaceId: workspaceId,
             anchorToken: anchorToken,
-            protectedToken: tempToken
+            protectedTokens: [anchorToken, tempToken],
+            isBurstOpen: true
         )
 
         XCTAssertFalse(transaction.suppressesUnrelatedActivation(token: anchorToken, workspaceId: workspaceId))
