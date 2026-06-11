@@ -77,6 +77,12 @@ final class OverviewController {
     private var animator: OverviewAnimator?
     private var thumbnailCache: [Int: CGImage] = [:]
     private var thumbnailCaptureTask: Task<Void, Never>?
+    private static let maxConcurrentThumbnailCaptures = 4
+
+    private struct ThumbnailCaptureItem: @unchecked Sendable {
+        let request: OverviewThumbnailCaptureRequest
+        let scWindow: SCWindow
+    }
     private var keyEventMonitor: Any?
     private var flagsEventMonitor: Any?
     private var applicationDidResignObserver: NSObjectProtocol?
@@ -466,15 +472,38 @@ final class OverviewController {
                 return (scWindow.windowID, scWindow)
             }
             let windowMap = Dictionary(uniqueKeysWithValues: eligibleWindows)
+            let captures = requests.compactMap { request -> ThumbnailCaptureItem? in
+                guard let scWindow = windowMap[CGWindowID(request.windowId)] else { return nil }
+                return ThumbnailCaptureItem(request: request, scWindow: scWindow)
+            }
 
-            for request in requests {
-                guard !Task.isCancelled else { return }
-                guard let scWindow = windowMap[CGWindowID(request.windowId)] else { continue }
+            await withTaskGroup(of: (windowId: Int, thumbnail: CGImage?).self) { group in
+                var nextIndex = 0
+                func addNextCapture() {
+                    guard nextIndex < captures.count, !Task.isCancelled else { return }
+                    let item = captures[nextIndex]
+                    nextIndex += 1
+                    group.addTask {
+                        guard !Task.isCancelled else { return (item.request.windowId, nil) }
+                        return (
+                            item.request.windowId,
+                            await Self.captureWindowThumbnail(scWindow: item.scWindow, request: item.request)
+                        )
+                    }
+                }
 
-                if let thumbnail = await captureWindowThumbnail(scWindow: scWindow, request: request) {
-                    thumbnailCache[request.windowId] = thumbnail
+                for _ in 0 ..< min(Self.maxConcurrentThumbnailCaptures, captures.count) {
+                    addNextCapture()
+                }
+                while let result = await group.next() {
+                    if let thumbnail = result.thumbnail {
+                        thumbnailCache[result.windowId] = thumbnail
+                    }
+                    addNextCapture()
                 }
             }
+
+            guard !Task.isCancelled else { return }
             updateWindowDisplays()
         } catch {
             return
@@ -513,7 +542,7 @@ final class OverviewController {
         )
     }
 
-    private func captureWindowThumbnail(
+    private nonisolated static func captureWindowThumbnail(
         scWindow: SCWindow,
         request: OverviewThumbnailCaptureRequest
     ) async -> CGImage? {
