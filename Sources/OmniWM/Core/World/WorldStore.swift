@@ -8,6 +8,7 @@ final class WorldStore {
     private let nowProvider: () -> Date
     private(set) var seq: UInt64 = 0
     private(set) var focus = FocusSessionSnapshot()
+    private(set) var viewports: [WorkspaceDescriptor.ID: ViewportState] = [:]
     private var commitDepth = 0
 
     init(nowProvider: @escaping () -> Date = Date.init) {
@@ -341,6 +342,18 @@ extension WorldStore {
     func updateFocus<T>(_ mutate: (inout FocusSessionSnapshot) -> T) -> T {
         assertInCommit("updateFocus")
         return mutate(&focus)
+    }
+
+    func applyViewportPlan(_ viewportPlan: ViewportPlan) {
+        assertInCommit("applyViewportPlan")
+        switch viewportPlan {
+        case let .set(workspaceId, state):
+            viewports[workspaceId] = state
+        case let .remove(workspaceIds):
+            for workspaceId in workspaceIds {
+                viewports.removeValue(forKey: workspaceId)
+            }
+        }
     }
 
     func setCachedConstraints(_ constraints: WindowSizeConstraints, for token: WindowToken) {
