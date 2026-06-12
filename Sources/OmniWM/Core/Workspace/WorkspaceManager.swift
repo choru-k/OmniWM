@@ -2769,9 +2769,7 @@ final class WorkspaceManager {
         guard let entry = world.entry(for: token) else {
             return false
         }
-        let previousMetadata = world.managedReplacementMetadata(for: token)
-        world.setManagedReplacementMetadata(metadata, for: token)
-        guard previousMetadata != metadata else {
+        guard world.managedReplacementMetadata(for: token) != metadata else {
             return false
         }
         recordReconcileEvent(
@@ -2779,6 +2777,7 @@ final class WorkspaceManager {
                 token: token,
                 workspaceId: entry.workspaceId,
                 monitorId: monitorId(for: entry.workspaceId),
+                metadata: metadata,
                 source: .workspaceManager
             )
         )
@@ -2821,8 +2820,16 @@ final class WorkspaceManager {
         let oldMode = entry.mode
         guard oldMode != mode else { return false }
 
-        world.setMode(mode, for: token)
         let workspaceId = entry.workspaceId
+        recordReconcileEvent(
+            .windowModeChanged(
+                token: token,
+                workspaceId: workspaceId,
+                monitorId: monitorId(for: workspaceId),
+                mode: mode,
+                source: .workspaceManager
+            )
+        )
         let focusChanged = updateFocusSession(notify: false) { focus in
             self.reconcileRememberedFocusAfterModeChange(
                 token,
@@ -2835,15 +2842,6 @@ final class WorkspaceManager {
         if focusChanged {
             notifySessionStateChanged()
         }
-        recordReconcileEvent(
-            .windowModeChanged(
-                token: token,
-                workspaceId: workspaceId,
-                monitorId: monitorId(for: workspaceId),
-                mode: mode,
-                source: .workspaceManager
-            )
-        )
         return true
     }
 
@@ -2895,13 +2893,13 @@ final class WorkspaceManager {
         )
         guard world.floatingState(for: token) != state else { return }
 
-        world.setFloatingState(state, for: token)
         recordReconcileEvent(
             .floatingGeometryUpdated(
                 token: token,
                 workspaceId: entry.workspaceId,
                 referenceMonitorId: resolvedReferenceMonitor?.id,
                 frame: frame,
+                normalizedOrigin: normalizedOrigin,
                 restoreToFloating: restoreToFloating,
                 source: .workspaceManager
             )
@@ -3003,7 +3001,6 @@ final class WorkspaceManager {
     func setWorkspace(for token: WindowToken, to workspace: WorkspaceDescriptor.ID) {
         let previousWorkspace = world.workspace(for: token)
         guard previousWorkspace != workspace else { return }
-        world.updateWorkspace(for: token, workspace: workspace)
         if let originalToken = nativeFullscreenOriginalToken(for: token),
            var record = nativeFullscreenRecordsByOriginalToken[originalToken],
            record.currentToken == token,
@@ -3033,18 +3030,16 @@ final class WorkspaceManager {
 
     func setHiddenState(_ state: WindowModel.HiddenState?, for token: WindowToken) {
         guard world.hiddenState(for: token) != state else { return }
-        world.setHiddenState(state, for: token)
-        if let workspaceId = workspace(for: token) {
-            recordReconcileEvent(
-                .hiddenStateChanged(
-                    token: token,
-                    workspaceId: workspaceId,
-                    monitorId: monitorId(for: workspaceId),
-                    hiddenState: state,
-                    source: .workspaceManager
-                )
+        guard let workspaceId = workspace(for: token) else { return }
+        recordReconcileEvent(
+            .hiddenStateChanged(
+                token: token,
+                workspaceId: workspaceId,
+                monitorId: monitorId(for: workspaceId),
+                hiddenState: state,
+                source: .workspaceManager
             )
-        }
+        )
     }
 
     func hiddenState(for token: WindowToken) -> WindowModel.HiddenState? {
@@ -3061,48 +3056,36 @@ final class WorkspaceManager {
 
     func setLayoutReason(_ reason: LayoutReason, for token: WindowToken) {
         guard world.layoutReason(for: token) != reason else { return }
-        world.setLayoutReason(reason, for: token)
         guard let workspaceId = workspace(for: token) else { return }
-        switch reason {
-        case .nativeFullscreen:
-            recordReconcileEvent(
-                .nativeFullscreenTransition(
-                    token: token,
-                    workspaceId: workspaceId,
-                    monitorId: monitorId(for: workspaceId),
-                    isActive: true,
-                    source: .workspaceManager
-                )
+        recordReconcileEvent(
+            .nativeFullscreenTransition(
+                token: token,
+                workspaceId: workspaceId,
+                monitorId: monitorId(for: workspaceId),
+                change: .suspended(reason),
+                source: .workspaceManager
             )
-        case .standard,
-             .macosHiddenApp:
-            recordReconcileEvent(
-                .nativeFullscreenTransition(
-                    token: token,
-                    workspaceId: workspaceId,
-                    monitorId: monitorId(for: workspaceId),
-                    isActive: false,
-                    source: .workspaceManager
-                )
-            )
-        }
+        )
     }
 
     func restoreFromNativeState(for token: WindowToken) -> ParentKind? {
-        let wasNative = layoutReason(for: token) != .standard
-        let restored = world.restoreFromNativeState(for: token)
-        if (restored != nil || wasNative), let workspaceId = workspace(for: token) {
-            recordReconcileEvent(
-                .nativeFullscreenTransition(
-                    token: token,
-                    workspaceId: workspaceId,
-                    monitorId: monitorId(for: workspaceId),
-                    isActive: false,
-                    source: .workspaceManager
-                )
-            )
+        guard let entry = world.entry(for: token),
+              entry.layoutReason != .standard,
+              let workspaceId = workspace(for: token)
+        else {
+            return nil
         }
-        return restored
+        let restoredParentKind = entry.prevParentKind
+        recordReconcileEvent(
+            .nativeFullscreenTransition(
+                token: token,
+                workspaceId: workspaceId,
+                monitorId: monitorId(for: workspaceId),
+                change: .restored,
+                source: .workspaceManager
+            )
+        )
+        return restoredParentKind
     }
 
     func isNativeFullscreenTemporarilyUnavailable(_ token: WindowToken) -> Bool {
@@ -4195,10 +4178,10 @@ final class WorkspaceManager {
         case let .windowAdmitted(_, workspaceId, _, _, _, _, _, _),
              let .windowModeChanged(_, workspaceId, _, _, _),
              let .hiddenStateChanged(_, workspaceId, _, _, _),
-             let .managedReplacementMetadataChanged(_, workspaceId, _, _):
+             let .managedReplacementMetadataChanged(_, workspaceId, _, _, _):
             bumpRuntimeRevision(for: workspaceId, domains: [.workspace, .layout, .focus])
 
-        case let .floatingGeometryUpdated(_, workspaceId, _, _, _, _):
+        case let .floatingGeometryUpdated(_, workspaceId, _, _, _, _, _):
             bumpRuntimeRevision(for: workspaceId, domains: [.workspace, .layout])
 
         case let .windowRekeyed(_, _, workspaceId, _, _, _, _, _):

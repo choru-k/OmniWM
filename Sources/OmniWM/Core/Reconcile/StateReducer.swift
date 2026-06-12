@@ -84,7 +84,7 @@ enum StateReducer {
                 mode: mode
             )
 
-        case let .floatingGeometryUpdated(_, workspaceId, referenceMonitorId, frame, restoreToFloating, _):
+        case let .floatingGeometryUpdated(_, workspaceId, referenceMonitorId, frame, _, restoreToFloating, _):
             plan.lifecyclePhase = .floating
             var observedState = baseObservedState(
                 from: existingEntry,
@@ -118,17 +118,19 @@ enum StateReducer {
                 plan.lifecyclePhase = lifecyclePhase(for: existingEntry?.mode ?? .tiling)
             }
 
-        case let .nativeFullscreenTransition(_, workspaceId, monitorId, isActive, _):
+        case let .nativeFullscreenTransition(_, workspaceId, monitorId, change, _):
             var observedState = baseObservedState(
                 from: existingEntry,
                 workspaceId: workspaceId,
                 monitorId: monitorId
             )
-            observedState.isNativeFullscreen = isActive
+            observedState.isNativeFullscreen = change.isNativeFullscreenActive
             plan.observedState = observedState
-            plan.lifecyclePhase = isActive ? .nativeFullscreen : lifecyclePhase(for: existingEntry?.mode ?? .tiling)
+            plan.lifecyclePhase = change.isNativeFullscreenActive
+                ? .nativeFullscreen
+                : lifecyclePhase(for: existingEntry?.mode ?? .tiling)
 
-        case let .managedReplacementMetadataChanged(_, workspaceId, monitorId, _):
+        case let .managedReplacementMetadataChanged(_, workspaceId, monitorId, _, _):
             plan.observedState = baseObservedState(
                 from: existingEntry,
                 workspaceId: workspaceId,

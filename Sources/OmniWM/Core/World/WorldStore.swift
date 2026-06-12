@@ -100,21 +100,52 @@ final class WorldStore {
             guard phase == .afterPlan else { return }
             model.removeWindow(key: token)
 
+        case let .workspaceAssigned(token, _, to, _, _):
+            guard phase == .beforePlan else { return }
+            model.updateWorkspace(for: token, workspace: to)
+
+        case let .windowModeChanged(token, _, _, mode, _):
+            guard phase == .beforePlan else { return }
+            model.setMode(mode, for: token)
+
+        case let .floatingGeometryUpdated(token, _, referenceMonitorId, frame, normalizedOrigin, restoreToFloating, _):
+            guard phase == .beforePlan else { return }
+            model.setFloatingState(
+                .init(
+                    lastFrame: frame,
+                    normalizedOrigin: normalizedOrigin,
+                    referenceMonitorId: referenceMonitorId,
+                    restoreToFloating: restoreToFloating
+                ),
+                for: token
+            )
+
+        case let .hiddenStateChanged(token, _, _, hiddenState, _):
+            guard phase == .beforePlan else { return }
+            model.setHiddenState(hiddenState, for: token)
+
+        case let .nativeFullscreenTransition(token, _, _, change, _):
+            guard phase == .beforePlan else { return }
+            switch change {
+            case let .suspended(reason):
+                model.setLayoutReason(reason, for: token)
+            case .restored:
+                _ = model.restoreFromNativeState(for: token)
+            }
+
+        case let .managedReplacementMetadataChanged(token, _, _, metadata, _):
+            guard phase == .beforePlan else { return }
+            model.setManagedReplacementMetadata(metadata, for: token)
+
         case .activeSpaceChanged,
-             .floatingGeometryUpdated,
              .focusLeaseChanged,
-             .hiddenStateChanged,
              .managedFocusCancelled,
              .managedFocusConfirmed,
              .managedFocusRequested,
-             .managedReplacementMetadataChanged,
-             .nativeFullscreenTransition,
              .nonManagedFocusChanged,
              .systemSleep,
              .systemWake,
-             .topologyChanged,
-             .windowModeChanged,
-             .workspaceAssigned:
+             .topologyChanged:
             break
         }
     }
@@ -256,10 +287,12 @@ extension WorldStore {
     }
 
     func updateWorkspace(for token: WindowToken, workspace: WorkspaceDescriptor.ID) {
+        assertInCommit("updateWorkspace")
         model.updateWorkspace(for: token, workspace: workspace)
     }
 
     func setMode(_ mode: TrackedWindowMode, for token: WindowToken) {
+        assertInCommit("setMode")
         model.setMode(mode, for: token)
     }
 
@@ -269,22 +302,6 @@ extension WorldStore {
 
     func setManualLayoutOverride(_ override: ManualWindowOverride?, for token: WindowToken) {
         model.setManualLayoutOverride(override, for: token)
-    }
-
-    func setManagedReplacementMetadata(_ metadata: ManagedReplacementMetadata?, for token: WindowToken) {
-        model.setManagedReplacementMetadata(metadata, for: token)
-    }
-
-    func setHiddenState(_ state: WindowModel.HiddenState?, for token: WindowToken) {
-        model.setHiddenState(state, for: token)
-    }
-
-    func setLayoutReason(_ reason: LayoutReason, for token: WindowToken) {
-        model.setLayoutReason(reason, for: token)
-    }
-
-    func restoreFromNativeState(for token: WindowToken) -> ParentKind? {
-        model.restoreFromNativeState(for: token)
     }
 
     func setCachedConstraints(_ constraints: WindowSizeConstraints, for token: WindowToken) {

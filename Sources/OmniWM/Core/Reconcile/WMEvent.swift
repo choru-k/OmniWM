@@ -10,6 +10,15 @@ enum WMEventSource: String, Equatable {
     case focusPolicy
 }
 
+enum NativeFullscreenLayoutChange: Equatable {
+    case suspended(LayoutReason)
+    case restored
+
+    var isNativeFullscreenActive: Bool {
+        self == .suspended(.nativeFullscreen)
+    }
+}
+
 enum WMEvent: Equatable {
     case windowAdmitted(
         token: WindowToken,
@@ -55,6 +64,7 @@ enum WMEvent: Equatable {
         workspaceId: WorkspaceDescriptor.ID,
         referenceMonitorId: Monitor.ID?,
         frame: CGRect,
+        normalizedOrigin: CGPoint?,
         restoreToFloating: Bool,
         source: WMEventSource
     )
@@ -69,13 +79,14 @@ enum WMEvent: Equatable {
         token: WindowToken,
         workspaceId: WorkspaceDescriptor.ID,
         monitorId: Monitor.ID?,
-        isActive: Bool,
+        change: NativeFullscreenLayoutChange,
         source: WMEventSource
     )
     case managedReplacementMetadataChanged(
         token: WindowToken,
         workspaceId: WorkspaceDescriptor.ID,
         monitorId: Monitor.ID?,
+        metadata: ManagedReplacementMetadata?,
         source: WMEventSource
     )
     case topologyChanged(
@@ -124,10 +135,10 @@ enum WMEvent: Equatable {
              let .windowRemoved(token, _, _),
              let .workspaceAssigned(token, _, _, _, _),
              let .windowModeChanged(token, _, _, _, _),
-             let .floatingGeometryUpdated(token, _, _, _, _, _),
+             let .floatingGeometryUpdated(token, _, _, _, _, _, _),
              let .hiddenStateChanged(token, _, _, _, _),
              let .nativeFullscreenTransition(token, _, _, _, _),
-             let .managedReplacementMetadataChanged(token, _, _, _),
+             let .managedReplacementMetadataChanged(token, _, _, _, _),
              let .managedFocusRequested(token, _, _, _, _),
              let .managedFocusConfirmed(token, _, _, _, _, _):
             token
@@ -152,10 +163,10 @@ enum WMEvent: Equatable {
              let .windowRemoved(_, _, source),
              let .workspaceAssigned(_, _, _, _, source),
              let .windowModeChanged(_, _, _, _, source),
-             let .floatingGeometryUpdated(_, _, _, _, _, source),
+             let .floatingGeometryUpdated(_, _, _, _, _, _, source),
              let .hiddenStateChanged(_, _, _, _, source),
              let .nativeFullscreenTransition(_, _, _, _, source),
-             let .managedReplacementMetadataChanged(_, _, _, source),
+             let .managedReplacementMetadataChanged(_, _, _, _, source),
              let .topologyChanged(_, source),
              let .activeSpaceChanged(source),
              let .focusLeaseChanged(_, source),
@@ -181,13 +192,13 @@ enum WMEvent: Equatable {
             "workspace_assigned token=\(token) from=\(from?.uuidString ?? "nil") to=\(to.uuidString)"
         case let .windowModeChanged(token, workspaceId, _, mode, _):
             "window_mode_changed token=\(token) workspace=\(workspaceId.uuidString) mode=\(mode)"
-        case let .floatingGeometryUpdated(token, workspaceId, _, frame, restoreToFloating, _):
+        case let .floatingGeometryUpdated(token, workspaceId, _, frame, _, restoreToFloating, _):
             "floating_geometry_updated token=\(token) workspace=\(workspaceId.uuidString) frame=\(frame.debugDescription) restore=\(restoreToFloating)"
         case let .hiddenStateChanged(token, workspaceId, _, hiddenState, _):
             "hidden_state_changed token=\(token) workspace=\(workspaceId.uuidString) hidden=\(hiddenState != nil)"
-        case let .nativeFullscreenTransition(token, workspaceId, _, isActive, _):
-            "native_fullscreen token=\(token) workspace=\(workspaceId.uuidString) active=\(isActive)"
-        case let .managedReplacementMetadataChanged(token, workspaceId, monitorId, _):
+        case let .nativeFullscreenTransition(token, workspaceId, _, change, _):
+            "native_fullscreen token=\(token) workspace=\(workspaceId.uuidString) active=\(change.isNativeFullscreenActive)"
+        case let .managedReplacementMetadataChanged(token, workspaceId, monitorId, _, _):
             "managed_replacement_metadata_changed token=\(token) workspace=\(workspaceId.uuidString) monitor=\(String(describing: monitorId))"
         case let .topologyChanged(displays, _):
             "topology_changed displays=\(displays.count)"

@@ -56,7 +56,7 @@ enum EventNormalizer {
                 source: source
             )
 
-        case let .floatingGeometryUpdated(token, workspaceId, referenceMonitorId, frame, restoreToFloating, source):
+        case let .floatingGeometryUpdated(token, workspaceId, referenceMonitorId, frame, normalizedOrigin, restoreToFloating, source):
             return .floatingGeometryUpdated(
                 token: token,
                 workspaceId: workspaceId,
@@ -65,6 +65,7 @@ enum EventNormalizer {
                     ?? existingEntry?.desiredState.monitorId
                     ?? existingEntry?.observedState.monitorId,
                 frame: frame,
+                normalizedOrigin: normalizedOrigin,
                 restoreToFloating: restoreToFloating,
                 source: source
             )
@@ -78,20 +79,21 @@ enum EventNormalizer {
                 source: source
             )
 
-        case let .nativeFullscreenTransition(token, workspaceId, monitorId, isActive, source):
+        case let .nativeFullscreenTransition(token, workspaceId, monitorId, change, source):
             return .nativeFullscreenTransition(
                 token: token,
                 workspaceId: workspaceId,
                 monitorId: monitorId ?? existingEntry?.observedState.monitorId ?? existingEntry?.desiredState.monitorId,
-                isActive: isActive,
+                change: change,
                 source: source
             )
 
-        case let .managedReplacementMetadataChanged(token, workspaceId, monitorId, source):
+        case let .managedReplacementMetadataChanged(token, workspaceId, monitorId, metadata, source):
             return .managedReplacementMetadataChanged(
                 token: token,
                 workspaceId: workspaceId,
                 monitorId: monitorId ?? existingEntry?.observedState.monitorId ?? existingEntry?.desiredState.monitorId,
+                metadata: metadata,
                 source: source
             )
 
