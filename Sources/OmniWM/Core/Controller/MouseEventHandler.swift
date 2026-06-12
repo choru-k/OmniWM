@@ -1085,33 +1085,26 @@ final class MouseEventHandler {
     ) {
         guard let controller else { return }
         let insetFrame = controller.insetWorkingFrame(for: monitor)
-        let viewportWidth = insetFrame.width
-        let gap = CGFloat(controller.workspaceManager.gaps)
-        let columns = engine.columns(in: wsId)
+        let driver = controller.workspaceManager.animationDriver
 
-        var didApply = false
-        controller.workspaceManager.withNiriViewportState(for: wsId) { vstate in
-            if vstate.viewOffsetPixels.isAnimating {
-                vstate.settleAtCurrentOffset()
+        if !driver.hasGesture(in: wsId) {
+            guard !engine.columns(in: wsId).isEmpty else { return }
+            if controller.workspaceManager.niriViewportState(for: wsId).viewOffsetPixels.isAnimating {
+                controller.workspaceManager.withNiriViewportState(for: wsId) { vstate in
+                    vstate.settleAtCurrentOffset()
+                }
             }
-
-            if !vstate.viewOffsetPixels.isGesture {
-                guard vstate.beginGesture(isTrackpad: true, columns: columns) else { return }
-            }
-
-            _ = vstate.updateGesture(
-                deltaPixels: delta,
-                timestamp: timestamp,
-                isTrackpad: true,
-                columns: columns,
-                gap: gap,
-                viewportWidth: viewportWidth
-            )
-            didApply = true
+            driver.beginGesture(in: wsId, isTrackpad: true)
         }
-        if didApply {
-            controller.layoutRefreshController.requestImmediateRelayout(reason: .interactiveGesture)
-        }
+
+        driver.updateGesture(
+            in: wsId,
+            delta: Double(delta),
+            timestamp: timestamp,
+            isTrackpad: true,
+            viewportWidth: Double(insetFrame.width)
+        )
+        controller.layoutRefreshController.startScrollAnimation(for: wsId, forGesture: true)
     }
 
     private func applyMouseWheelColumnTicks(
@@ -1126,13 +1119,13 @@ final class MouseEventHandler {
         let step = ticks > 0 ? 1 : -1
         let motion = controller.motionPolicy.snapshot()
 
+        if controller.workspaceManager.animationDriver.trackpadGestureActive(in: wsId) {
+            return
+        }
+
         var didApply = false
         var shouldStartAnimation = false
         controller.workspaceManager.withNiriViewportState(for: wsId) { vstate in
-            if vstate.viewOffsetPixels.gestureRef?.isTrackpad == true {
-                return
-            }
-
             for _ in 0 ..< abs(ticks) {
                 let columns = engine.columns(in: wsId)
                 let targetColumnIndex = vstate.activeColumnIndex + step
@@ -1195,14 +1188,25 @@ final class MouseEventHandler {
         let scale = NSScreen.screens.first(where: { $0.displayId == monitor.displayId })?
             .backingScaleFactor ?? 2.0
 
+        guard let sample = controller.workspaceManager.animationDriver.finishGesture(
+            in: wsId,
+            isTrackpad: true,
+            viewportWidth: Double(insetFrame.width),
+            timestamp: timestamp
+        ) else { return }
+
+        let baseOffset = Double(controller.workspaceManager.niriViewportState(for: wsId).viewOffsetPixels.current())
+
         var selectedWindow: NiriWindow?
         controller.workspaceManager.withNiriViewportState(for: wsId) { endState in
             endState.endGesture(
+                currentOffset: baseOffset + sample.relativeOffset,
+                projectedOffset: baseOffset + sample.relativeProjectedOffset,
+                velocity: sample.velocity,
                 columns: columns,
                 gap: gap,
                 viewportWidth: insetFrame.width,
                 motion: controller.motionPolicy.snapshot(),
-                isTrackpad: true,
                 snapToColumn: true,
                 centerMode: engine.centerFocusedColumn,
                 alwaysCenterSingleColumn: engine.alwaysCenterSingleColumn,
@@ -1216,7 +1220,11 @@ final class MouseEventHandler {
         if let selectedWindow {
             rememberViewportFocusAnchor(selectedWindow, engine: engine, wsId: wsId)
         }
-        controller.layoutRefreshController.startScrollAnimation(for: wsId)
+        if controller.workspaceManager.niriViewportState(for: wsId).viewOffsetPixels.isAnimating {
+            controller.layoutRefreshController.startScrollAnimation(for: wsId)
+        } else {
+            controller.layoutRefreshController.requestImmediateRelayout(reason: .interactiveGesture)
+        }
     }
 
     private func finalizeCommittedGestureAfterTouchRelease(
@@ -1238,18 +1246,17 @@ final class MouseEventHandler {
 
     private func cancelCommittedGestureViewportState(for wsId: WorkspaceDescriptor.ID) {
         guard let controller else { return }
-        var didCancel = false
+        let relativeOffset = controller.workspaceManager.animationDriver.cancelGesture(in: wsId)
+        guard relativeOffset != nil
+            || controller.workspaceManager.niriViewportState(for: wsId).viewOffsetPixels.isAnimating
+        else { return }
         controller.workspaceManager.withNiriViewportState(for: wsId) { vstate in
-            guard vstate.viewOffsetPixels.isGesture || vstate.viewOffsetPixels.isAnimating else { return }
-            vstate.settleAtCurrentOffset()
+            vstate.viewOffsetPixels = .static(vstate.viewOffsetPixels.current() + CGFloat(relativeOffset ?? 0))
             vstate.selectionProgress = 0.0
             vstate.viewOffsetToRestore = nil
             vstate.activatePrevColumnOnRemoval = nil
-            didCancel = true
         }
-        if didCancel {
-            controller.layoutRefreshController.requestImmediateRelayout(reason: .interactiveGesture)
-        }
+        controller.layoutRefreshController.requestImmediateRelayout(reason: .interactiveGesture)
     }
 
     private func abortActiveGestureIfNeeded() {
@@ -1296,6 +1303,11 @@ final class MouseEventHandler {
     }
 
     private func resetGestureState() {
+        if let lockedContext = state.lockedGestureContext,
+           controller?.workspaceManager.animationDriver.hasGesture(in: lockedContext.workspaceId) == true
+        {
+            cancelCommittedGestureViewportState(for: lockedContext.workspaceId)
+        }
         state.gesturePhase = .idle
         state.gestureStartX = 0.0
         state.gestureStartY = 0.0

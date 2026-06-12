@@ -1,51 +1,15 @@
 import AppKit
 import Foundation
 
-private let VIEW_GESTURE_WORKING_AREA_MOVEMENT: Double = 1200.0
-
 extension ViewportState {
-    @discardableResult
-    mutating func beginGesture(isTrackpad: Bool, columns: [NiriContainer]) -> Bool {
-        guard !columns.isEmpty else { return false }
-        let currentOffset = viewOffsetPixels.current()
-        viewOffsetPixels = .gesture(ViewGesture(currentViewOffset: Double(currentOffset), isTrackpad: isTrackpad))
-        selectionProgress = 0.0
-        return true
-    }
-
-    mutating func updateGesture(
-        deltaPixels: CGFloat,
-        timestamp: TimeInterval,
-        isTrackpad: Bool? = nil,
-        columns: [NiriContainer],
-        gap: CGFloat,
-        viewportWidth: CGFloat
-    ) -> Int? {
-        guard case let .gesture(gesture) = viewOffsetPixels else {
-            return nil
-        }
-        if let isTrackpad, isTrackpad != gesture.isTrackpad {
-            return nil
-        }
-
-        gesture.tracker.push(delta: Double(deltaPixels), timestamp: timestamp)
-
-        let normFactor = gesture.isTrackpad
-            ? Double(viewportWidth) / VIEW_GESTURE_WORKING_AREA_MOVEMENT
-            : 1.0
-        let pos = gesture.tracker.position * normFactor
-        let viewOffset = pos + gesture.deltaFromTracker
-
-        gesture.currentViewOffset = viewOffset
-        return nil
-    }
-
     mutating func endGesture(
+        currentOffset: Double,
+        projectedOffset: Double,
+        velocity: Double,
         columns: [NiriContainer],
         gap: CGFloat,
         viewportWidth: CGFloat,
         motion: MotionSnapshot,
-        isTrackpad: Bool? = nil,
         snapToColumn: Bool = true,
         centerMode: CenterFocusedColumn = .never,
         alwaysCenterSingleColumn: Bool = false,
@@ -54,35 +18,18 @@ extension ViewportState {
         scale: CGFloat = 2.0,
         timestamp: TimeInterval? = nil
     ) {
-        guard case let .gesture(gesture) = viewOffsetPixels else {
-            return
-        }
-        if let isTrackpad, isTrackpad != gesture.isTrackpad {
-            return
-        }
-
-        let currentOffsetForFallback = gesture.current()
         let now = timestamp ?? CACurrentMediaTime()
-        gesture.tracker.push(delta: 0, timestamp: now)
-
-        let normFactor = gesture.isTrackpad
-            ? Double(viewportWidth) / VIEW_GESTURE_WORKING_AREA_MOVEMENT
-            : 1.0
-        let pos = gesture.tracker.position * normFactor
-        let currentOffset = pos + gesture.deltaFromTracker
 
         guard !columns.isEmpty else {
-            endGestureWithoutSnap(currentOffset: currentOffsetForFallback)
+            endGestureWithoutSnap(currentOffset: currentOffset)
             return
         }
 
         let totalColumnWidth = Double(totalWidth(columns: columns, gap: gap))
         guard totalColumnWidth.isFinite, totalColumnWidth > 0 else {
-            endGestureWithoutSnap(currentOffset: currentOffsetForFallback)
+            endGestureWithoutSnap(currentOffset: currentOffset)
             return
         }
-
-        gesture.currentViewOffset = currentOffset
 
         guard snapToColumn else {
             endGesturePreservingCurrentOffset(
@@ -93,10 +40,6 @@ extension ViewportState {
             )
             return
         }
-
-        let velocity = gesture.tracker.velocity() * normFactor
-        let projectedTrackerPos = gesture.tracker.projectedEndPosition() * normFactor
-        let projectedOffset = projectedTrackerPos + gesture.deltaFromTracker
 
         let activeColX = columnX(at: activeColumnIndex, columns: columns, gap: gap)
         let projectedViewPos = Double(activeColX) + projectedOffset

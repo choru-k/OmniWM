@@ -83,7 +83,8 @@ extension NiriLayoutEngine {
         orientation: Monitor.Orientation = .horizontal,
         animationTime: TimeInterval? = nil,
         hiddenPlacementMonitor: HiddenPlacementMonitorContext? = nil,
-        hiddenPlacementMonitors: [HiddenPlacementMonitorContext] = []
+        hiddenPlacementMonitors: [HiddenPlacementMonitorContext] = [],
+        viewOffsetOverride: CGFloat? = nil
     ) -> LayoutResult {
         var frames: [WindowToken: CGRect] = [:]
         var hiddenHandles: [WindowToken: HideSide] = [:]
@@ -100,7 +101,8 @@ extension NiriLayoutEngine {
             orientation: orientation,
             animationTime: animationTime,
             hiddenPlacementMonitor: hiddenPlacementMonitor,
-            hiddenPlacementMonitors: hiddenPlacementMonitors
+            hiddenPlacementMonitors: hiddenPlacementMonitors,
+            viewOffsetOverride: viewOffsetOverride
         )
         return LayoutResult(frames: frames, hiddenHandles: hiddenHandles)
     }
@@ -118,7 +120,8 @@ extension NiriLayoutEngine {
         orientation: Monitor.Orientation = .horizontal,
         animationTime: TimeInterval? = nil,
         hiddenPlacementMonitor: HiddenPlacementMonitorContext? = nil,
-        hiddenPlacementMonitors: [HiddenPlacementMonitorContext] = []
+        hiddenPlacementMonitors: [HiddenPlacementMonitorContext] = [],
+        viewOffsetOverride: CGFloat? = nil
     ) {
         let containers = columns(in: workspaceId)
         guard !containers.isEmpty else { return }
@@ -190,7 +193,7 @@ extension NiriLayoutEngine {
             runningPos += span + primaryGap
         }
 
-        let viewOffset = state.viewOffsetPixels.value(at: time)
+        let viewOffset = viewOffsetOverride ?? state.viewOffsetPixels.value(at: time)
         let activeIdx = state.activeColumnIndex.clamped(to: 0 ... max(0, containers.count - 1))
         let activePos = containers.isEmpty ? 0 : containerPositions[activeIdx]
         let viewPos = activePos + viewOffset

@@ -100,14 +100,17 @@ enum NiriWindowMoveResult {
         let columnAnimationsRunning = engine.tickAllColumnAnimations(in: wsId, at: targetTime)
 
         var state = controller.workspaceManager.niriViewportState(for: wsId)
+        let offsetBeforeTick = state.viewOffsetPixels
         let viewportAnimationRunning = state.advanceAnimations(at: targetTime)
+        let gestureRunning = controller.workspaceManager.animationDriver.hasGesture(in: wsId)
 
         let didApplyFrames = applyFramesOnDemand(
             wsId: wsId,
             state: state,
             engine: engine,
             monitor: monitor,
-            animationTime: targetTime
+            animationTime: targetTime,
+            commitViewport: offsetBeforeTick != state.viewOffsetPixels
         )
         guard didApplyFrames else {
             controller.layoutRefreshController.requestRelayout(
@@ -119,6 +122,7 @@ enum NiriWindowMoveResult {
         let animationsOngoing = viewportAnimationRunning
             || windowAnimationsRunning
             || columnAnimationsRunning
+            || gestureRunning
 
         if !animationsOngoing {
             applyFramesOnDemand(
@@ -145,7 +149,8 @@ enum NiriWindowMoveResult {
         state: ViewportState,
         engine: NiriLayoutEngine,
         monitor: Monitor,
-        animationTime: TimeInterval? = nil
+        animationTime: TimeInterval? = nil,
+        commitViewport: Bool = false
     ) -> Bool {
         guard let controller,
               let activeWorkspaceId = controller.workspaceManager.activeWorkspaceOrFirst(on: monitor.id)?.id,
@@ -165,7 +170,8 @@ enum NiriWindowMoveResult {
             snapshot: snapshot,
             engine: engine,
             monitor: monitor,
-            animationTime: animationTime
+            animationTime: animationTime,
+            commitViewport: commitViewport
         )
         return controller.layoutRefreshController.executeLayoutPlan(plan)
     }
@@ -328,7 +334,8 @@ enum NiriWindowMoveResult {
         snapshot: NiriWorkspaceSnapshot,
         engine: NiriLayoutEngine,
         monitor: Monitor,
-        animationTime: TimeInterval?
+        animationTime: TimeInterval?,
+        commitViewport: Bool = false
     ) -> WorkspaceLayoutPlan {
         let gaps = LayoutGaps(
             horizontal: snapshot.gap,
@@ -348,7 +355,11 @@ enum NiriWindowMoveResult {
             gaps: gaps,
             state: snapshot.viewportState,
             workingArea: area,
-            animationTime: animationTime
+            animationTime: animationTime,
+            viewOffsetOverride: controller?.workspaceManager.animationDriver.gestureLiveOffset(
+                in: snapshot.workspaceId,
+                semanticOffset: snapshot.viewportState.viewOffsetPixels.current()
+            )
         )
 
         let diff = layoutDiff(
@@ -365,7 +376,7 @@ enum NiriWindowMoveResult {
             plannedSeq: snapshot.plannedSeq,
             sessionPatch: WorkspaceSessionPatch(
                 workspaceId: snapshot.workspaceId,
-                viewportState: animationTime == nil ? nil : snapshot.viewportState,
+                viewportState: commitViewport ? snapshot.viewportState : nil,
                 plannedSeq: snapshot.plannedSeq
             ),
             diff: diff,
@@ -612,7 +623,8 @@ enum NiriWindowMoveResult {
         let offsetBefore = state.viewOffsetPixels.current()
         var viewportNeedsRecalc = removal.removalResult.viewportNeedsRecalc
 
-        let isGestureOrAnimation = state.viewOffsetPixels.isGesture || state.viewOffsetPixels.isAnimating
+        let isGestureOrAnimation = controller?.workspaceManager.animationDriver.hasGesture(in: pass.wsId) == true
+            || state.viewOffsetPixels.isAnimating
 
         resolveColumnWidthsIfNeeded(pass: pass)
 
@@ -854,7 +866,11 @@ enum NiriWindowMoveResult {
             gaps: gaps,
             state: state,
             workingArea: area,
-            animationTime: nil
+            animationTime: nil,
+            viewOffsetOverride: controller?.workspaceManager.animationDriver.gestureLiveOffset(
+                in: pass.wsId,
+                semanticOffset: state.viewOffsetPixels.current()
+            )
         )
 
         let hasColumnAnimations = pass.engine.hasAnyColumnAnimationsRunning(in: pass.wsId)

@@ -158,6 +158,7 @@ final class WorkspaceManager {
     private(set) var outerGaps: LayoutGaps.OuterGaps = .zero
     private let world = WorldStore()
     private let restorePlanner = RestorePlanner()
+    let animationDriver = AnimationDriver()
     private let bootPersistedWindowRestoreCatalog: PersistedWindowRestoreCatalog
     private var nativeFullscreenRecordsByOriginalToken: [WindowToken: NativeFullscreenRecord] = [:]
     private var nativeFullscreenOriginalTokenByCurrentToken: [WindowToken: WindowToken] = [:]
@@ -3275,6 +3276,7 @@ final class WorkspaceManager {
             workspacesById.removeValue(forKey: id)
         }
         world.removeInvalidationMarks(for: ids)
+        animationDriver.removeMotions(for: ids)
 
         _cachedSortedWorkspaces = nil
         workspaceIdByName = workspaceIdByName.filter { !toRemove.contains($0.value) }

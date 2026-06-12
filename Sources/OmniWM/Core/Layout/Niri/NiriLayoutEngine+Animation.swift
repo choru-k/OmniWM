@@ -200,7 +200,8 @@ extension NiriLayoutEngine {
         gaps: LayoutGaps,
         state: ViewportState,
         workingArea: WorkingAreaContext? = nil,
-        animationTime: TimeInterval? = nil
+        animationTime: TimeInterval? = nil,
+        viewOffsetOverride: CGFloat? = nil
     ) -> LayoutResult {
         let area = workingArea ?? WorkingAreaContext(
             workingFrame: monitor.visibleFrame,
@@ -223,7 +224,8 @@ extension NiriLayoutEngine {
             orientation: orientation,
             animationTime: animationTime,
             hiddenPlacementMonitor: hiddenPlacementMonitor,
-            hiddenPlacementMonitors: hiddenPlacementMonitors
+            hiddenPlacementMonitors: hiddenPlacementMonitors,
+            viewOffsetOverride: viewOffsetOverride
         )
     }
 
@@ -233,7 +235,8 @@ extension NiriLayoutEngine {
         gaps: LayoutGaps,
         state: ViewportState,
         workingArea: WorkingAreaContext? = nil,
-        animationTime: TimeInterval? = nil
+        animationTime: TimeInterval? = nil,
+        viewOffsetOverride: CGFloat? = nil
     ) -> (frames: [WindowToken: CGRect], hiddenHandles: [WindowToken: HideSide]) {
         framePool.removeAll(keepingCapacity: true)
         hiddenPool.removeAll(keepingCapacity: true)
@@ -261,7 +264,8 @@ extension NiriLayoutEngine {
             orientation: orientation,
             animationTime: animationTime,
             hiddenPlacementMonitor: hiddenPlacementMonitor,
-            hiddenPlacementMonitors: hiddenPlacementMonitors
+            hiddenPlacementMonitors: hiddenPlacementMonitors,
+            viewOffsetOverride: viewOffsetOverride
         )
 
         return (framePool, hiddenPool)

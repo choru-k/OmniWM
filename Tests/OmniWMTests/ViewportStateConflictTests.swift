@@ -49,27 +49,6 @@ final class ViewportStateConflictTests: XCTestCase {
         XCTAssertEqual(next.activeColumnIndex, 1)
     }
 
-    func testResolveCommitConflictsReplacesLocalGestureWithCurrentSpring() {
-        let animation = spring()
-        let current = state(activeColumnIndex: 6, viewOffsetPixels: .spring(animation))
-        var next = state(
-            activeColumnIndex: 1,
-            viewOffsetPixels: .gesture(ViewGesture(currentViewOffset: 10, isTrackpad: true))
-        )
-        next.resolveCommitConflicts(against: current, hasStaleSelection: false)
-        XCTAssertEqual(next.viewOffsetPixels, .spring(animation))
-        XCTAssertEqual(next.activeColumnIndex, 6)
-    }
-
-    func testResolveCommitConflictsKeepsLocalGestureWhenCurrentIsNotSpring() {
-        let gesture = ViewGesture(currentViewOffset: 10, isTrackpad: true)
-        let current = state(activeColumnIndex: 6, viewOffsetPixels: .static(80))
-        var next = state(activeColumnIndex: 1, viewOffsetPixels: .gesture(gesture))
-        next.resolveCommitConflicts(against: current, hasStaleSelection: false)
-        XCTAssertEqual(next.viewOffsetPixels, .gesture(gesture))
-        XCTAssertEqual(next.activeColumnIndex, 1)
-    }
-
     func testResolveCommitConflictsKeepsLocalSpringOverCurrentSpring() {
         let localAnimation = spring(to: 50)
         let current = state(activeColumnIndex: 6, viewOffsetPixels: .spring(spring(to: 200)))
@@ -77,26 +56,6 @@ final class ViewportStateConflictTests: XCTestCase {
         next.resolveCommitConflicts(against: current, hasStaleSelection: false)
         XCTAssertEqual(next.viewOffsetPixels, .spring(localAnimation))
         XCTAssertEqual(next.activeColumnIndex, 1)
-    }
-
-    func testResolveCommitConflictsAppliesStaleRebaseAndSpringAdoptionTogether() {
-        let currentNodeId = NodeId()
-        let animation = spring()
-        let current = state(
-            selectedNodeId: currentNodeId,
-            activeColumnIndex: 3,
-            selectionProgress: 1.0,
-            viewOffsetPixels: .spring(animation)
-        )
-        var next = state(
-            selectedNodeId: NodeId(),
-            activeColumnIndex: 0,
-            viewOffsetPixels: .gesture(ViewGesture(currentViewOffset: 0, isTrackpad: false))
-        )
-        next.resolveCommitConflicts(against: current, hasStaleSelection: true)
-        XCTAssertEqual(next.selectedNodeId, currentNodeId)
-        XCTAssertEqual(next.viewOffsetPixels, .spring(animation))
-        XCTAssertEqual(next.activeColumnIndex, 3)
     }
 
     @MainActor

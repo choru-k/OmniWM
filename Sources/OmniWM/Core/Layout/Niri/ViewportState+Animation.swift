@@ -22,8 +22,6 @@ extension ViewportState {
             return offset
         case .spring(let anim):
             return CGFloat(anim.target)
-        case .gesture(let g):
-            return CGFloat(g.stationaryViewOffset)
         }
     }
 
@@ -41,17 +39,7 @@ extension ViewportState {
             }
             return true
 
-        case let .gesture(gesture):
-            if let anim = gesture.animation {
-                if anim.isComplete(at: time) {
-                    gesture.animation = nil
-                    return false
-                }
-                return true
-            }
-            return false
-
-        default:
+        case .static:
             return false
         }
     }
@@ -121,11 +109,6 @@ extension ViewportState {
     }
 
     mutating func animateViewOffsetRestore(_ offset: CGFloat, motion: MotionSnapshot, clock: AnimationClock?) {
-        guard !viewOffsetPixels.isGesture else {
-            viewOffsetToRestore = nil
-            return
-        }
-
         guard motion.animationsEnabled else {
             viewOffsetPixels = .static(offset)
             viewOffsetToRestore = nil

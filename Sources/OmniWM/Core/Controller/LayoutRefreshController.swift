@@ -261,8 +261,8 @@ import QuartzCore
         controller?.surfaceReconciler.reconcileAnimationTick()
     }
 
-    func startScrollAnimation(for workspaceId: WorkspaceDescriptor.ID) {
-        guard controller?.motionPolicy.animationsEnabled != false else { return }
+    func startScrollAnimation(for workspaceId: WorkspaceDescriptor.ID, forGesture: Bool = false) {
+        guard forGesture || controller?.motionPolicy.animationsEnabled != false else { return }
         guard let controller else { return }
         let targetDisplayId: CGDirectDisplayID
         if let monitor = controller.workspaceManager.monitor(for: workspaceId) {
