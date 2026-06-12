@@ -167,15 +167,6 @@ final class WorkspaceManager {
     private var persistedWindowRestoreCatalogSaveScheduled = false
     private var persistedWindowRestoreCatalogBuildInFlight = false
     private var persistedWindowRestoreCatalogRevision: UInt64 = 0
-    private var runtimeRevisionSerial: UInt64 = 0
-    private var globalWorkspaceRevision: UInt64 = 0
-    private var globalLayoutRevision: UInt64 = 0
-    private var globalFocusRevision: UInt64 = 0
-    private var globalFullscreenRevision: UInt64 = 0
-    private var workspaceRevisions: [WorkspaceDescriptor.ID: UInt64] = [:]
-    private var layoutRevisions: [WorkspaceDescriptor.ID: UInt64] = [:]
-    private var focusRevisions: [WorkspaceDescriptor.ID: UInt64] = [:]
-    private var fullscreenRevisions: [WorkspaceDescriptor.ID: UInt64] = [:]
     var persistedRestoreBundleIdProvider: ((pid_t) -> String?)?
 
     private var _cachedSortedMonitors: [Monitor]?
@@ -245,22 +236,24 @@ final class WorkspaceManager {
     }
 
     func runtimeRevision(for workspaceId: WorkspaceDescriptor.ID) -> RuntimeRevision {
-        RuntimeRevision(
-            runtime: runtimeRevisionSerial,
-            workspace: workspaceRevisions[workspaceId, default: 0],
-            layout: layoutRevisions[workspaceId, default: 0],
-            focus: focusRevisions[workspaceId, default: 0],
-            fullscreen: fullscreenRevisions[workspaceId, default: 0]
+        let marks = world.invalidationMarks(for: workspaceId)
+        return RuntimeRevision(
+            runtime: world.epochMarks.maxSeq,
+            workspace: marks.workspace,
+            layout: marks.layout,
+            focus: marks.focus,
+            fullscreen: marks.fullscreen
         )
     }
 
     func runtimeEpoch(for domains: RuntimeRevisionDomain) -> RuntimeRevision {
-        RuntimeRevision(
-            runtime: runtimeRevisionSerial,
-            workspace: globalWorkspaceRevision,
-            layout: globalLayoutRevision,
-            focus: globalFocusRevision,
-            fullscreen: globalFullscreenRevision
+        let marks = world.epochMarks
+        return RuntimeRevision(
+            runtime: marks.maxSeq,
+            workspace: marks.workspace,
+            layout: marks.layout,
+            focus: marks.focus,
+            fullscreen: marks.fullscreen
         )
     }
 
@@ -3297,11 +3290,8 @@ final class WorkspaceManager {
         }
         for id in ids {
             workspacesById.removeValue(forKey: id)
-            workspaceRevisions.removeValue(forKey: id)
-            layoutRevisions.removeValue(forKey: id)
-            focusRevisions.removeValue(forKey: id)
-            fullscreenRevisions.removeValue(forKey: id)
         }
+        world.removeInvalidationMarks(for: ids)
 
         _cachedSortedWorkspaces = nil
         workspaceIdByName = workspaceIdByName.filter { !toRemove.contains($0.value) }
@@ -3862,55 +3852,12 @@ final class WorkspaceManager {
         for workspaceId: WorkspaceDescriptor.ID?,
         domains: RuntimeRevisionDomain
     ) {
-        runtimeRevisionSerial &+= 1
-        guard let workspaceId else {
-            for workspaceId in allRuntimeRevisionWorkspaceIds() {
-                bumpRuntimeRevisionDomains(for: workspaceId, domains: domains)
-            }
-            onRuntimeRevisionChanged?(nil, domains)
-            return
-        }
-        bumpRuntimeRevisionDomains(for: workspaceId, domains: domains)
+        world.noteInvalidation(workspaceId: workspaceId, domains: domains)
         onRuntimeRevisionChanged?(workspaceId, domains)
     }
 
-    private func bumpRuntimeRevisionDomains(
-        for workspaceId: WorkspaceDescriptor.ID,
-        domains: RuntimeRevisionDomain
-    ) {
-        if domains.contains(.workspace) {
-            globalWorkspaceRevision &+= 1
-            workspaceRevisions[workspaceId, default: 0] &+= 1
-        }
-        if domains.contains(.layout) {
-            globalLayoutRevision &+= 1
-            layoutRevisions[workspaceId, default: 0] &+= 1
-        }
-        if domains.contains(.focus) {
-            globalFocusRevision &+= 1
-            focusRevisions[workspaceId, default: 0] &+= 1
-        }
-        if domains.contains(.fullscreen) {
-            globalFullscreenRevision &+= 1
-            fullscreenRevisions[workspaceId, default: 0] &+= 1
-        }
-    }
-
     private func bumpAllRuntimeRevisions(domains: RuntimeRevisionDomain) {
-        runtimeRevisionSerial &+= 1
-        for workspaceId in allRuntimeRevisionWorkspaceIds() {
-            bumpRuntimeRevisionDomains(for: workspaceId, domains: domains)
-        }
-        onRuntimeRevisionChanged?(nil, domains)
-    }
-
-    private func allRuntimeRevisionWorkspaceIds() -> Set<WorkspaceDescriptor.ID> {
-        Set(workspacesById.keys)
-            .union(world.allEntries().map(\.workspaceId))
-            .union(workspaceRevisions.keys)
-            .union(layoutRevisions.keys)
-            .union(focusRevisions.keys)
-            .union(fullscreenRevisions.keys)
+        bumpRuntimeRevision(for: nil, domains: domains)
     }
 }
 

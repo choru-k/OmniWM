@@ -1,6 +1,41 @@
 import CoreGraphics
 import Foundation
 
+struct InvalidationMarks: Equatable {
+    var workspace: UInt64 = 0
+    var layout: UInt64 = 0
+    var focus: UInt64 = 0
+    var fullscreen: UInt64 = 0
+
+    var maxSeq: UInt64 {
+        max(max(workspace, layout), max(focus, fullscreen))
+    }
+
+    mutating func record(_ seq: UInt64, domains: RuntimeRevisionDomain) {
+        if domains.contains(.workspace) { workspace = seq }
+        if domains.contains(.layout) { layout = seq }
+        if domains.contains(.focus) { focus = seq }
+        if domains.contains(.fullscreen) { fullscreen = seq }
+    }
+
+    func isCurrent(_ plannedSeq: UInt64, domains: RuntimeRevisionDomain) -> Bool {
+        if domains.contains(.workspace), workspace > plannedSeq { return false }
+        if domains.contains(.layout), layout > plannedSeq { return false }
+        if domains.contains(.focus), focus > plannedSeq { return false }
+        if domains.contains(.fullscreen), fullscreen > plannedSeq { return false }
+        return true
+    }
+
+    func merged(with other: InvalidationMarks) -> InvalidationMarks {
+        InvalidationMarks(
+            workspace: max(workspace, other.workspace),
+            layout: max(layout, other.layout),
+            focus: max(focus, other.focus),
+            fullscreen: max(fullscreen, other.fullscreen)
+        )
+    }
+}
+
 @MainActor
 final class WorldStore {
     private let model = WindowModel()
@@ -13,6 +48,9 @@ final class WorldStore {
     private(set) var monitorSessions: [Monitor.ID: MonitorSession] = [:]
     private(set) var niriEngine: NiriLayoutEngine?
     private(set) var dwindleEngine: DwindleLayoutEngine?
+    private(set) var epochMarks = InvalidationMarks()
+    private var broadcastMarks = InvalidationMarks()
+    private var workspaceMarks: [WorkspaceDescriptor.ID: InvalidationMarks] = [:]
     private var commitDepth = 0
 
     init(nowProvider: @escaping () -> Date = Date.init) {
@@ -72,6 +110,38 @@ final class WorldStore {
 
     func traceRecords() -> [ReconcileTraceRecord] {
         trace.snapshot()
+    }
+
+    func noteInvalidation(workspaceId: WorkspaceDescriptor.ID?, domains: RuntimeRevisionDomain) {
+        seq &+= 1
+        epochMarks.record(seq, domains: domains)
+        if let workspaceId {
+            workspaceMarks[workspaceId, default: InvalidationMarks()].record(seq, domains: domains)
+        } else {
+            broadcastMarks.record(seq, domains: domains)
+        }
+    }
+
+    func invalidationMarks(for workspaceId: WorkspaceDescriptor.ID) -> InvalidationMarks {
+        broadcastMarks.merged(with: workspaceMarks[workspaceId] ?? InvalidationMarks())
+    }
+
+    func isSeqCurrent(
+        _ plannedSeq: UInt64,
+        for workspaceId: WorkspaceDescriptor.ID,
+        domains: RuntimeRevisionDomain
+    ) -> Bool {
+        invalidationMarks(for: workspaceId).isCurrent(plannedSeq, domains: domains)
+    }
+
+    func isSeqEpochCurrent(_ plannedSeq: UInt64, domains: RuntimeRevisionDomain) -> Bool {
+        epochMarks.isCurrent(plannedSeq, domains: domains)
+    }
+
+    func removeInvalidationMarks<S: Sequence>(for workspaceIds: S) where S.Element == WorkspaceDescriptor.ID {
+        for workspaceId in workspaceIds {
+            workspaceMarks.removeValue(forKey: workspaceId)
+        }
     }
 
     private enum MutationPhase {
