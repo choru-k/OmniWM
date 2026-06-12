@@ -920,7 +920,7 @@ final class RuntimeArchitectureTests: XCTestCase {
             mode: .floating
         )
 
-        let hiddenState = WindowModel.HiddenState(
+        let hiddenState = HiddenState(
             proportionalPosition: CGPoint(x: 0.25, y: 0.5),
             referenceMonitorId: nil,
             reason: .workspaceInactive
@@ -930,7 +930,7 @@ final class RuntimeArchitectureTests: XCTestCase {
         manager.setHiddenState(hiddenState, for: token)
         XCTAssertEqual(manager.runtimeRevision(for: workspaceId), afterHiddenState)
 
-        let floatingState = WindowModel.FloatingState(
+        let floatingState = FloatingState(
             lastFrame: CGRect(x: 10, y: 20, width: 300, height: 200),
             normalizedOrigin: CGPoint(x: 0.1, y: 0.2),
             referenceMonitorId: nil,
@@ -957,7 +957,7 @@ final class RuntimeArchitectureTests: XCTestCase {
         let before = manager.runtimeEpoch(for: .layoutCommit)
 
         manager.setFloatingState(
-            WindowModel.FloatingState(
+            FloatingState(
                 lastFrame: CGRect(x: 10, y: 20, width: 300, height: 200),
                 normalizedOrigin: CGPoint(x: 0.1, y: 0.2),
                 referenceMonitorId: nil,
@@ -968,7 +968,7 @@ final class RuntimeArchitectureTests: XCTestCase {
         manager.setManualLayoutOverride(.forceFloat, for: missingToken)
         manager.setCachedConstraints(.fixed(size: CGSize(width: 320, height: 240)), for: missingToken)
         manager.setHiddenState(
-            WindowModel.HiddenState(
+            HiddenState(
                 proportionalPosition: .zero,
                 referenceMonitorId: nil,
                 reason: .workspaceInactive
@@ -992,7 +992,7 @@ final class RuntimeArchitectureTests: XCTestCase {
         )
         let staleRevision = manager.runtimeRevision(for: workspaceId)
         manager.setHiddenState(
-            WindowModel.HiddenState(
+            HiddenState(
                 proportionalPosition: .zero,
                 referenceMonitorId: nil,
                 reason: .workspaceInactive
@@ -1686,7 +1686,7 @@ final class RuntimeArchitectureTests: XCTestCase {
         XCTAssertTrue(terminalResults.isEmpty)
 
         controller.workspaceManager.setHiddenState(
-            WindowModel.HiddenState(
+            HiddenState(
                 proportionalPosition: .zero,
                 referenceMonitorId: nil,
                 reason: .workspaceInactive
@@ -1776,7 +1776,7 @@ final class RuntimeArchitectureTests: XCTestCase {
 
         controller.withRuntimeFrameJobCancellationSuppressed {
             controller.workspaceManager.setHiddenState(
-                WindowModel.HiddenState(
+                HiddenState(
                     proportionalPosition: .zero,
                     referenceMonitorId: nil,
                     reason: .workspaceInactive
@@ -1810,7 +1810,7 @@ final class RuntimeArchitectureTests: XCTestCase {
             mode: .floating
         )
         let staleEntry = try XCTUnwrap(controller.workspaceManager.entry(for: token))
-        let hiddenState = WindowModel.HiddenState(
+        let hiddenState = HiddenState(
             proportionalPosition: .zero,
             referenceMonitorId: nil,
             reason: .scratchpad
@@ -1866,7 +1866,7 @@ final class RuntimeArchitectureTests: XCTestCase {
             windowId: 765_206,
             to: workspaceId
         )
-        let hiddenState = WindowModel.HiddenState(
+        let hiddenState = HiddenState(
             proportionalPosition: .zero,
             referenceMonitorId: nil,
             reason: .scratchpad
@@ -1919,7 +1919,7 @@ final class RuntimeArchitectureTests: XCTestCase {
             to: workspaceId,
             mode: .floating
         )
-        let hiddenState = WindowModel.HiddenState(
+        let hiddenState = HiddenState(
             proportionalPosition: .zero,
             referenceMonitorId: nil,
             reason: .scratchpad
@@ -3145,7 +3145,7 @@ final class RuntimeArchitectureTests: XCTestCase {
         windowId: Int,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws -> (controller: WMController, entry: WindowModel.Entry, requestId: UInt64) {
+    ) throws -> (controller: WMController, entry: WindowState, requestId: UInt64) {
         let controller = Self.controller(file: file, line: line)
         let workspaceId = try XCTUnwrap(
             controller.workspaceManager.workspaceId(for: "1", createIfMissing: true),
@@ -3198,7 +3198,7 @@ final class RuntimeArchitectureTests: XCTestCase {
     @MainActor
     private static func confirmManagedNiriFocus(
         controller: WMController,
-        entry: WindowModel.Entry,
+        entry: WindowState,
         requestId: UInt64,
         file: StaticString = #filePath,
         line: UInt = #line

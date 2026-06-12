@@ -713,7 +713,7 @@ final class WorkspaceManager {
     private func mergePersistedHydration(
         _ hydration: PersistedHydrationMutation,
         into plan: ActionPlan,
-        existingEntry: WindowModel.Entry?
+        existingEntry: WindowState?
     ) -> ActionPlan {
         var mergedPlan = plan
         let monitorId = hydration.monitorId
@@ -897,7 +897,7 @@ final class WorkspaceManager {
         PersistedWindowRestoreCatalogBuilder.build(from: persistedWindowRestoreCatalogBuildSnapshot())
     }
 
-    private func persistedRestoreMetadata(for entry: WindowModel.Entry) -> ManagedReplacementMetadata? {
+    private func persistedRestoreMetadata(for entry: WindowState) -> ManagedReplacementMetadata? {
         let bundleId = entry.managedReplacementMetadata?.bundleId
             ?? persistedRestoreBundleIdProvider?(entry.pid)
         guard bundleId != nil || entry.managedReplacementMetadata != nil else {
@@ -1574,7 +1574,7 @@ final class WorkspaceManager {
         transitionId: UInt64,
         now: Date = Date(),
         staleInterval: TimeInterval = staleUnavailableNativeFullscreenTimeout
-    ) -> WindowModel.Entry? {
+    ) -> WindowState? {
         guard let record = nativeFullscreenRecordsByOriginalToken[originalToken],
               record.transitionId == transitionId,
               record.availability == .temporarilyUnavailable,
@@ -1906,7 +1906,7 @@ final class WorkspaceManager {
     }
 
     private func isFocusResolutionEligible(
-        _ entry: WindowModel.Entry,
+        _ entry: WindowState,
         in workspaceId: WorkspaceDescriptor.ID,
         mode: TrackedWindowMode
     ) -> Bool {
@@ -2333,7 +2333,7 @@ final class WorkspaceManager {
         to newToken: WindowToken,
         newAXRef: AXWindowRef,
         managedReplacementMetadata: ManagedReplacementMetadata? = nil
-    ) -> WindowModel.Entry? {
+    ) -> WindowState? {
         guard let existingEntry = world.entry(for: oldToken),
               oldToken == newToken || world.entry(for: newToken) == nil
         else {
@@ -2375,18 +2375,18 @@ final class WorkspaceManager {
         return world.entry(for: newToken)
     }
 
-    func entries(in workspace: WorkspaceDescriptor.ID) -> [WindowModel.Entry] {
+    func entries(in workspace: WorkspaceDescriptor.ID) -> [WindowState] {
         world.windows(in: workspace)
     }
 
-    func tiledEntries(in workspace: WorkspaceDescriptor.ID) -> [WindowModel.Entry] {
+    func tiledEntries(in workspace: WorkspaceDescriptor.ID) -> [WindowState] {
         world.windows(in: workspace, mode: .tiling)
     }
 
     func barVisibleEntries(
         in workspace: WorkspaceDescriptor.ID,
         showFloatingWindows: Bool = false
-    ) -> [WindowModel.Entry] {
+    ) -> [WindowState] {
         var entries = tiledEntries(in: workspace)
         if showFloatingWindows {
             entries.append(contentsOf: barVisibleFloatingEntries(in: workspace))
@@ -2405,11 +2405,11 @@ final class WorkspaceManager {
         !barVisibleEntries(in: workspace, showFloatingWindows: showFloatingWindows).isEmpty
     }
 
-    func floatingEntries(in workspace: WorkspaceDescriptor.ID) -> [WindowModel.Entry] {
+    func floatingEntries(in workspace: WorkspaceDescriptor.ID) -> [WindowState] {
         world.windows(in: workspace, mode: .floating)
     }
 
-    private func barVisibleFloatingEntries(in workspace: WorkspaceDescriptor.ID) -> [WindowModel.Entry] {
+    private func barVisibleFloatingEntries(in workspace: WorkspaceDescriptor.ID) -> [WindowState] {
         floatingEntries(in: workspace).filter {
             !isScratchpadToken($0.token) && hiddenState(for: $0.token)?.isScratchpad != true
         }
@@ -2419,42 +2419,42 @@ final class WorkspaceManager {
         world.handle(for: token)
     }
 
-    func entry(for token: WindowToken) -> WindowModel.Entry? {
+    func entry(for token: WindowToken) -> WindowState? {
         world.entry(for: token)
     }
 
-    func entry(for handle: WindowHandle) -> WindowModel.Entry? {
+    func entry(for handle: WindowHandle) -> WindowState? {
         world.entry(for: handle)
     }
 
-    func entry(forPid pid: pid_t, windowId: Int) -> WindowModel.Entry? {
+    func entry(forPid pid: pid_t, windowId: Int) -> WindowState? {
         world.entry(forPid: pid, windowId: windowId)
     }
 
-    func entries(forPid pid: pid_t) -> [WindowModel.Entry] {
+    func entries(forPid pid: pid_t) -> [WindowState] {
         world.entries(forPid: pid)
     }
 
-    func entry(forWindowId windowId: Int) -> WindowModel.Entry? {
+    func entry(forWindowId windowId: Int) -> WindowState? {
         world.entry(forWindowId: windowId)
     }
 
-    func entry(forWindowId windowId: Int, inVisibleWorkspaces: Bool) -> WindowModel.Entry? {
+    func entry(forWindowId windowId: Int, inVisibleWorkspaces: Bool) -> WindowState? {
         guard inVisibleWorkspaces else {
             return world.entry(forWindowId: windowId)
         }
         return world.entry(forWindowId: windowId, inVisibleWorkspaces: visibleWorkspaceIds())
     }
 
-    func allEntries() -> [WindowModel.Entry] {
+    func allEntries() -> [WindowState] {
         world.allEntries()
     }
 
-    func allTiledEntries() -> [WindowModel.Entry] {
+    func allTiledEntries() -> [WindowState] {
         world.allEntries(mode: .tiling)
     }
 
-    func allFloatingEntries() -> [WindowModel.Entry] {
+    func allFloatingEntries() -> [WindowState] {
         world.allEntries(mode: .floating)
     }
 
@@ -2576,11 +2576,11 @@ final class WorkspaceManager {
         return true
     }
 
-    func floatingState(for token: WindowToken) -> WindowModel.FloatingState? {
+    func floatingState(for token: WindowToken) -> FloatingState? {
         world.floatingState(for: token)
     }
 
-    func setFloatingState(_ state: WindowModel.FloatingState?, for token: WindowToken) {
+    func setFloatingState(_ state: FloatingState?, for token: WindowToken) {
         guard let entry = world.entry(for: token) else { return }
         guard world.floatingState(for: token) != state else { return }
         recordReconcileEvent(
@@ -2627,7 +2627,7 @@ final class WorkspaceManager {
             in: referenceVisibleFrame
         )
 
-        let state = WindowModel.FloatingState(
+        let state = FloatingState(
             lastFrame: frame,
             normalizedOrigin: normalizedOrigin,
             referenceMonitorId: resolvedReferenceMonitor?.id,
@@ -2682,14 +2682,14 @@ final class WorkspaceManager {
 
     @discardableResult
     func removeMissing(
-        keys activeKeys: Set<WindowModel.WindowKey>,
+        keys activeKeys: Set<WindowToken>,
         requiredConsecutiveMisses: Int = 1
-    ) -> [WindowModel.Entry] {
+    ) -> [WindowState] {
         let confirmedMissingKeys = world.confirmedMissingKeys(
             keys: activeKeys,
             requiredConsecutiveMisses: requiredConsecutiveMisses
         )
-        var removedEntries: [WindowModel.Entry] = []
+        var removedEntries: [WindowState] = []
         removedEntries.reserveCapacity(confirmedMissingKeys.count)
         for key in confirmedMissingKeys {
             guard let entry = world.entry(for: key) else { continue }
@@ -2702,7 +2702,7 @@ final class WorkspaceManager {
     }
 
     @discardableResult
-    func removeWindow(pid: pid_t, windowId: Int) -> WindowModel.Entry? {
+    func removeWindow(pid: pid_t, windowId: Int) -> WindowState? {
         guard let entry = world.entry(forPid: pid, windowId: windowId) else { return nil }
         let removedEntry = removeTrackedWindow(entry)
         schedulePersistedWindowRestoreCatalogSave()
@@ -2727,7 +2727,7 @@ final class WorkspaceManager {
     }
 
     @discardableResult
-    private func removeTrackedWindow(_ entry: WindowModel.Entry) -> WindowModel.Entry {
+    private func removeTrackedWindow(_ entry: WindowState) -> WindowState {
         let previousFocus = world.focus
         recordReconcileEvent(
             .windowRemoved(
@@ -2775,7 +2775,7 @@ final class WorkspaceManager {
         world.isHiddenInCorner(token)
     }
 
-    func setHiddenState(_ state: WindowModel.HiddenState?, for token: WindowToken) {
+    func setHiddenState(_ state: HiddenState?, for token: WindowToken) {
         guard world.hiddenState(for: token) != state else { return }
         guard let workspaceId = workspace(for: token) else { return }
         recordReconcileEvent(
@@ -2789,7 +2789,7 @@ final class WorkspaceManager {
         )
     }
 
-    func hiddenState(for token: WindowToken) -> WindowModel.HiddenState? {
+    func hiddenState(for token: WindowToken) -> HiddenState? {
         world.hiddenState(for: token)
     }
 

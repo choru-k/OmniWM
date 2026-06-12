@@ -124,7 +124,7 @@ import QuartzCore
         var runtimeRevision: RuntimeRevision
         let targetFrame: CGRect
         let targetMonitorId: Monitor.ID
-        let hiddenState: WindowModel.HiddenState
+        let hiddenState: HiddenState
         var postSuccessActions: [RefreshPostLayoutAction]
         var delayedVerificationScheduled: Bool = false
     }
@@ -305,7 +305,7 @@ import QuartzCore
         }
     }
 
-    func startWindowCloseAnimation(entry: WindowModel.Entry, monitor: Monitor) {
+    func startWindowCloseAnimation(entry: WindowState, monitor: Monitor) {
         guard controller?.motionPolicy.animationsEnabled != false else { return }
         guard controller != nil else { return }
         guard let frame = fastFrame(for: entry.token, axRef: entry.axRef) else { return }
@@ -633,7 +633,7 @@ import QuartzCore
     }
 
     func buildWindowSnapshots(
-        for entries: [WindowModel.Entry],
+        for entries: [WindowState],
         resolveConstraints: Bool = true,
         workingFrame: CGRect? = nil
     ) -> [LayoutWindowSnapshot] {
@@ -698,7 +698,7 @@ import QuartzCore
     private func resolvedLayoutConstraints(
         for constraints: WindowSizeConstraints,
         layoutReason: LayoutReason,
-        hiddenState: WindowModel.HiddenState?,
+        hiddenState: HiddenState?,
         workingFrame: CGRect?
     ) -> WindowSizeConstraints {
         let effectiveConstraints = constraints.normalized()
@@ -1317,7 +1317,7 @@ import QuartzCore
             throw CancellationError()
         }
         let windows = enumerationSnapshot.windows
-        var seenKeys: Set<WindowModel.WindowKey> = []
+        var seenKeys: Set<WindowToken> = []
         var decisionBasedRemovals: [WindowToken] = []
         let focusedWorkspaceId = controller.activeWorkspace()?.id
 
@@ -1488,32 +1488,32 @@ import QuartzCore
                 wsForWindow = existingAssignment ?? defaultWorkspace
                 ruleEffects = decision.ruleEffects
             }
-            let existingEntry = existingEntry
+            let refreshedEntry = existingEntry
                 .flatMap { controller.workspaceManager.entry(for: $0.token) }
                 ?? existingEntry
-            let oldMode = existingEntry?.mode
+            let oldMode = refreshedEntry?.mode
             let admittedMode = oldMode ?? trackedMode
             let parentWindowId = if let windowServer = evaluation.facts.windowServer {
                 windowServer.parentId == 0 ? nil : windowServer.parentId
             } else {
-                existingEntry?.managedReplacementMetadata?.parentWindowId
+                refreshedEntry?.managedReplacementMetadata?.parentWindowId
             }
             let managedReplacementMetadata = ManagedReplacementMetadata(
-                bundleId: evaluation.facts.ax.bundleId ?? bundleId ?? existingEntry?.managedReplacementMetadata?
+                bundleId: evaluation.facts.ax.bundleId ?? bundleId ?? refreshedEntry?.managedReplacementMetadata?
                     .bundleId,
                 workspaceId: wsForWindow,
                 mode: admittedMode,
-                role: evaluation.facts.ax.role ?? existingEntry?.managedReplacementMetadata?.role,
-                subrole: evaluation.facts.ax.subrole ?? existingEntry?.managedReplacementMetadata?.subrole,
-                title: evaluation.facts.ax.title ?? existingEntry?.managedReplacementMetadata?.title,
-                windowLevel: evaluation.facts.windowServer?.level ?? existingEntry?.managedReplacementMetadata?
+                role: evaluation.facts.ax.role ?? refreshedEntry?.managedReplacementMetadata?.role,
+                subrole: evaluation.facts.ax.subrole ?? refreshedEntry?.managedReplacementMetadata?.subrole,
+                title: evaluation.facts.ax.title ?? refreshedEntry?.managedReplacementMetadata?.title,
+                windowLevel: evaluation.facts.windowServer?.level ?? refreshedEntry?.managedReplacementMetadata?
                     .windowLevel,
                 parentWindowId: parentWindowId,
-                frame: evaluation.facts.windowServer?.frame ?? existingEntry?.managedReplacementMetadata?.frame,
-                transientWindowServerEvidence: existingEntry?.managedReplacementMetadata?
+                frame: evaluation.facts.windowServer?.frame ?? refreshedEntry?.managedReplacementMetadata?.frame,
+                transientWindowServerEvidence: refreshedEntry?.managedReplacementMetadata?
                     .transientWindowServerEvidence == true
                     || evaluation.facts.windowServer?.hasTransientSurfaceEvidence == true,
-                degradedWindowServerChildEvidence: existingEntry?.managedReplacementMetadata?
+                degradedWindowServerChildEvidence: refreshedEntry?.managedReplacementMetadata?
                     .degradedWindowServerChildEvidence == true
                     || evaluation.facts.degradedWindowServerChildEvidence
             )
@@ -1668,8 +1668,8 @@ import QuartzCore
     }
 
     private func preserveScratchpadHiddenWindowsDuringFullRescan(
-        _ entries: [WindowModel.Entry],
-        seenKeys: inout Set<WindowModel.WindowKey>
+        _ entries: [WindowState],
+        seenKeys: inout Set<WindowToken>
     ) {
         guard let controller else { return }
         for entry in entries where controller.workspaceManager.hiddenState(for: entry.token)?.isScratchpad == true {
@@ -1700,7 +1700,7 @@ import QuartzCore
         }
     }
 
-    private func scratchpadRescanObservation(for entry: WindowModel.Entry) -> ScratchpadRescanObservation? {
+    private func scratchpadRescanObservation(for entry: WindowState) -> ScratchpadRescanObservation? {
         guard controller != nil else { return nil }
         guard let windowId = UInt32(exactly: entry.windowId) else { return nil }
 
@@ -1734,7 +1734,7 @@ import QuartzCore
         return nil
     }
 
-    private func scratchpadVisibleWindowServerFrame(_ frame: CGRect, for entry: WindowModel.Entry) -> CGRect? {
+    private func scratchpadVisibleWindowServerFrame(_ frame: CGRect, for entry: WindowState) -> CGRect? {
         if scratchpadFrameIsVisible(frame, for: entry) {
             return frame
         }
@@ -1742,7 +1742,7 @@ import QuartzCore
         return scratchpadFrameIsVisible(appKitFrame, for: entry) ? appKitFrame : nil
     }
 
-    private func scratchpadFrameIsVisible(_ frame: CGRect, for entry: WindowModel.Entry) -> Bool {
+    private func scratchpadFrameIsVisible(_ frame: CGRect, for entry: WindowState) -> Bool {
         guard let controller else { return false }
         if let floatingFrame = controller.workspaceManager.floatingState(for: entry.token)?.lastFrame,
            frame.approximatelyEqual(to: floatingFrame, tolerance: FrameTolerance.screenMatch)
@@ -2219,7 +2219,7 @@ import QuartzCore
 
     private func workspaceEntriesSnapshot(
         on controller: WMController
-    ) -> [(workspace: WorkspaceDescriptor, entries: [WindowModel.Entry])] {
+    ) -> [(workspace: WorkspaceDescriptor, entries: [WindowState])] {
         controller.workspaceManager.workspaces.map { workspace in
             (workspace, controller.workspaceManager.entries(in: workspace.id))
         }
@@ -2278,7 +2278,7 @@ import QuartzCore
     }
 
     private func workspaceInactiveFloatingRestoreFrame(
-        for entry: WindowModel.Entry,
+        for entry: WindowState,
         monitor: Monitor
     ) -> CGRect? {
         guard let controller else { return nil }
@@ -2347,7 +2347,7 @@ import QuartzCore
     }
 
     private func hideWorkspace(
-        _ entries: [WindowModel.Entry],
+        _ entries: [WindowState],
         monitor: Monitor,
         preferredSide: HideSide,
         hiddenPlacementMonitors: [HiddenPlacementMonitorContext]? = nil
@@ -2369,14 +2369,14 @@ import QuartzCore
     }
 
     fileprivate struct WindowPositionPlan {
-        let entry: WindowModel.Entry
+        let entry: WindowState
         let origin: CGPoint
         let frameSize: CGSize
     }
 
     fileprivate enum HideOperationResolution {
-        case movable(WindowPositionPlan, hiddenState: WindowModel.HiddenState)
-        case alreadyHidden(hiddenState: WindowModel.HiddenState)
+        case movable(WindowPositionPlan, hiddenState: HiddenState)
+        case alreadyHidden(hiddenState: HiddenState)
         case unavailable
     }
 
@@ -2401,7 +2401,7 @@ import QuartzCore
     }
 
     fileprivate func resolveHideOperation(
-        for entry: WindowModel.Entry,
+        for entry: WindowState,
         monitor: Monitor,
         side: HideSide,
         reason: HideReason,
@@ -2451,14 +2451,14 @@ import QuartzCore
     }
 
     private func updatedHiddenState(
-        for entry: WindowModel.Entry,
+        for entry: WindowState,
         frame: CGRect,
         monitor: Monitor,
         side: HideSide,
         reason: HideReason
-    ) -> WindowModel.HiddenState {
+    ) -> HiddenState {
         guard let controller else {
-            return WindowModel.HiddenState(
+            return HiddenState(
                 proportionalPosition: .zero,
                 referenceMonitorId: nil,
                 reason: hiddenWindowReason(for: reason, side: side, existingState: nil)
@@ -2479,7 +2479,7 @@ import QuartzCore
             referenceMonitorId = referenceMonitor.id
         }
 
-        return WindowModel.HiddenState(
+        return HiddenState(
             proportionalPosition: proportionalPosition,
             referenceMonitorId: referenceMonitorId,
             reason: hiddenWindowReason(for: reason, side: side, existingState: existingState)
@@ -2489,8 +2489,8 @@ import QuartzCore
     private func hiddenWindowReason(
         for reason: HideReason,
         side: HideSide,
-        existingState: WindowModel.HiddenState?
-    ) -> WindowModel.HiddenReason {
+        existingState: HiddenState?
+    ) -> HiddenReason {
         if existingState?.isScratchpad == true, reason != .scratchpad {
             return .scratchpad
         }
@@ -2510,7 +2510,7 @@ import QuartzCore
     }
 
     func hideWindow(
-        _ entry: WindowModel.Entry,
+        _ entry: WindowState,
         monitor: Monitor,
         side: HideSide,
         reason: HideReason,
@@ -2589,7 +2589,7 @@ import QuartzCore
 
     @discardableResult
     func unhideWindow(
-        _ entry: WindowModel.Entry,
+        _ entry: WindowState,
         monitor: Monitor,
         onSuccess: PostLayoutAction? = nil
     ) -> Bool {
@@ -2610,7 +2610,7 @@ import QuartzCore
 
     @discardableResult
     func restoreScratchpadWindow(
-        _ entry: WindowModel.Entry,
+        _ entry: WindowState,
         monitor: Monitor,
         onSuccess: PostLayoutAction? = nil
     ) -> Bool {
@@ -2692,8 +2692,8 @@ import QuartzCore
     }
 
     fileprivate func shouldUsePendingRevealTransaction(
-        for entry: WindowModel.Entry,
-        hiddenState: WindowModel.HiddenState
+        for entry: WindowState,
+        hiddenState: HiddenState
     ) -> Bool {
         !hiddenState.workspaceInactive
             && entry.mode == .floating
@@ -2701,8 +2701,8 @@ import QuartzCore
     }
 
     func beginPendingRevealTransaction(
-        for entry: WindowModel.Entry,
-        hiddenState: WindowModel.HiddenState,
+        for entry: WindowState,
+        hiddenState: HiddenState,
         targetFrame: CGRect,
         monitor: Monitor,
         onSuccess: PostLayoutAction? = nil
@@ -2745,7 +2745,7 @@ import QuartzCore
     func rekeyPendingRevealTransaction(
         from oldToken: WindowToken,
         to newToken: WindowToken,
-        entry: WindowModel.Entry
+        entry: WindowState
     ) {
         let oldWindowId = oldToken.windowId
         let newWindowId = newToken.windowId
@@ -3046,8 +3046,8 @@ import QuartzCore
     }
 
     private func stalePendingRevealMonitor(
-        for entry: WindowModel.Entry,
-        hiddenState: WindowModel.HiddenState,
+        for entry: WindowState,
+        hiddenState: HiddenState,
         transaction: PendingRevealTransaction,
         using controller: WMController
     ) -> Monitor {
@@ -3057,7 +3057,7 @@ import QuartzCore
             ?? Monitor.fallback()
     }
 
-    private func hideReason(for hiddenState: WindowModel.HiddenState) -> HideReason {
+    private func hideReason(for hiddenState: HiddenState) -> HideReason {
         switch hiddenState.reason {
         case .workspaceInactive:
             .workspaceInactive
@@ -3134,9 +3134,9 @@ import QuartzCore
     }
 
     private func executeHiddenReveal(
-        _ entry: WindowModel.Entry,
+        _ entry: WindowState,
         monitor: Monitor,
-        hiddenState: WindowModel.HiddenState,
+        hiddenState: HiddenState,
         onSuccess: PostLayoutAction? = nil
     ) -> Bool {
         guard let controller else { return false }
@@ -3217,9 +3217,9 @@ import QuartzCore
     }
 
     private func restoreWindowFromHiddenState(
-        _ entry: WindowModel.Entry,
+        _ entry: WindowState,
         monitor: Monitor,
-        hiddenState: WindowModel.HiddenState
+        hiddenState: HiddenState
     ) -> HiddenRevealOperation {
         if entry.mode == .floating,
            hiddenState.restoresViaFloatingState,
@@ -3244,9 +3244,9 @@ import QuartzCore
     }
 
     fileprivate func makeRestorePositionPlan(
-        for entry: WindowModel.Entry,
+        for entry: WindowState,
         monitor: Monitor,
-        hiddenState: WindowModel.HiddenState
+        hiddenState: HiddenState
     ) -> WindowPositionPlan? {
         guard let controller else { return nil }
         guard let frame = fastFrame(for: entry.token, axRef: entry.axRef)
@@ -3311,11 +3311,11 @@ import QuartzCore
         return CGPoint(x: clampedX, y: clampedTopLeftY - windowSize.height)
     }
 
-    private func observedWindowFrame(_ entry: WindowModel.Entry) -> CGRect? {
+    private func observedWindowFrame(_ entry: WindowState) -> CGRect? {
         fastFrame(for: entry.token, axRef: entry.axRef)
     }
 
-    private func observedWindowOrigin(_ entry: WindowModel.Entry) -> CGPoint? {
+    private func observedWindowOrigin(_ entry: WindowState) -> CGPoint? {
         observedWindowFrame(entry)?.origin
     }
 
@@ -3364,11 +3364,11 @@ final class LayoutDiffExecutor {
 
         let diff = plan.diff
 
-        var resolvedEntries: [WindowToken: WindowModel.Entry] = [:]
-        var hiddenEntries: [(entry: WindowModel.Entry, side: HideSide)] = []
+        var resolvedEntries: [WindowToken: WindowState] = [:]
+        var hiddenEntries: [(entry: WindowState, side: HideSide)] = []
         var hiddenTokens: Set<WindowToken> = []
-        var shownEntries: [(entry: WindowModel.Entry, hiddenState: WindowModel.HiddenState?)] = []
-        var restoreEntries: [(entry: WindowModel.Entry, hiddenState: WindowModel.HiddenState)] = []
+        var shownEntries: [(entry: WindowState, hiddenState: HiddenState?)] = []
+        var restoreEntries: [(entry: WindowState, hiddenState: HiddenState)] = []
         var restoreTokens: Set<WindowToken> = []
         var frameChangeByToken: [WindowToken: CGRect] = [:]
         var pendingRevealTransactionIdsByToken: [WindowToken: UInt64] = [:]
@@ -3378,7 +3378,7 @@ final class LayoutDiffExecutor {
             frameChangeByToken[change.token] = change.frame
         }
 
-        func resolveEntry(for token: WindowToken) -> WindowModel.Entry? {
+        func resolveEntry(for token: WindowToken) -> WindowState? {
             if let cached = resolvedEntries[token] {
                 return cached
             }

@@ -325,7 +325,7 @@ final class IPCQueryRouter {
     }
 
     private func windowSnapshot(
-        from entry: WindowModel.Entry,
+        from entry: WindowState,
         focusedToken: WindowToken?,
         visibleWorkspaceIds: Set<WorkspaceDescriptor.ID>,
         fields: Set<String>?
@@ -420,7 +420,7 @@ final class IPCQueryRouter {
     }
 
     private func matchesWindowQuery(
-        _ entry: WindowModel.Entry,
+        _ entry: WindowState,
         selectors: IPCQuerySelectors,
         focusedToken: WindowToken?,
         visibleWorkspaceIds: Set<WorkspaceDescriptor.ID>
@@ -693,7 +693,7 @@ final class IPCQueryRouter {
         }
     }
 
-    private func ipcHiddenReason(from hiddenState: WindowModel.HiddenState) -> IPCHiddenReason {
+    private func ipcHiddenReason(from hiddenState: HiddenState) -> IPCHiddenReason {
         switch hiddenState.reason {
         case .workspaceInactive:
             .workspaceInactive

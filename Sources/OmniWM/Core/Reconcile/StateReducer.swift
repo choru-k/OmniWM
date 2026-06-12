@@ -4,7 +4,7 @@ import Foundation
 enum StateReducer {
     static func reduce(
         event: WMEvent,
-        existingEntry: WindowModel.Entry?,
+        existingEntry: WindowState?,
         currentSnapshot: ReconcileSnapshot,
         monitors: [Monitor]
     ) -> ActionPlan {
@@ -345,7 +345,7 @@ enum StateReducer {
     }
 
     static func restoreIntent(
-        for entry: WindowModel.Entry,
+        for entry: WindowState,
         monitors: [Monitor]
     ) -> RestoreIntent {
         let preferredMonitorId = entry.desiredState.monitorId
@@ -384,7 +384,7 @@ enum StateReducer {
     }
 
     private static func baseObservedState(
-        from entry: WindowModel.Entry?,
+        from entry: WindowState?,
         workspaceId: WorkspaceDescriptor.ID,
         monitorId: Monitor.ID?
     ) -> ObservedWindowState {
@@ -399,7 +399,7 @@ enum StateReducer {
     }
 
     private static func baseDesiredState(
-        from entry: WindowModel.Entry?,
+        from entry: WindowState?,
         workspaceId: WorkspaceDescriptor.ID,
         monitorId: Monitor.ID?,
         mode: TrackedWindowMode

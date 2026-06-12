@@ -922,7 +922,7 @@ final class AXEventHandler {
     }
 
     private func shouldSuppressFrameChangedRelayout(
-        for entry: WindowModel.Entry,
+        for entry: WindowState,
         observedFrame: CGRect?
     ) -> Bool {
         guard let controller else { return false }
@@ -964,13 +964,13 @@ final class AXEventHandler {
         return frame
     }
 
-    private func needsFocusedAXConfirmationForUnresolvedFrameChange(_ entry: WindowModel.Entry) -> Bool {
+    private func needsFocusedAXConfirmationForUnresolvedFrameChange(_ entry: WindowState) -> Bool {
         guard let controller else { return true }
         return entry.layoutReason == .nativeFullscreen
             || controller.workspaceManager.nativeFullscreenRecord(for: entry.token) != nil
     }
 
-    private func observedFrame(for entry: WindowModel.Entry) -> CGRect? {
+    private func observedFrame(for entry: WindowState) -> CGRect? {
         observedFrame(for: entry.axRef)
     }
 
@@ -1129,21 +1129,21 @@ final class AXEventHandler {
             )
         }
 
-        let trackedEntry = controller.workspaceManager.entry(for: trackedToken) ?? trackedEntry
+        let liveTrackedEntry = controller.workspaceManager.entry(for: trackedToken) ?? trackedEntry
         if let floatingTargetFrame,
-           shouldApplyFloatingCreateFrameImmediately(for: trackedEntry.workspaceId)
+           shouldApplyFloatingCreateFrameImmediately(for: liveTrackedEntry.workspaceId)
         {
             scheduleFloatingCreateFrameApplication(
                 floatingTargetFrame,
                 token: trackedToken,
-                pid: trackedEntry.pid,
-                windowId: trackedEntry.windowId,
-                workspaceId: trackedEntry.workspaceId
+                pid: liveTrackedEntry.pid,
+                windowId: liveTrackedEntry.windowId,
+                workspaceId: liveTrackedEntry.workspaceId
             )
         } else {
-            scheduleAXContextWarmup(for: trackedEntry.pid)
+            scheduleAXContextWarmup(for: liveTrackedEntry.pid)
         }
-        if trackedEntry.mode == .floating {
+        if liveTrackedEntry.mode == .floating {
             controller.windowActionHandler.raiseFloatingWindow(trackedToken)
         }
         if candidate.requiresPostCreateLifecycleVerification {
@@ -1471,7 +1471,7 @@ final class AXEventHandler {
     }
 
     private func shouldDeferSameAppActivationForCloseProbe(
-        entry observedEntry: WindowModel.Entry,
+        entry observedEntry: WindowState,
         requestDisposition: ActivationRequestDisposition,
         source: ActivationEventSource,
         origin: ActivationCallOrigin
@@ -1513,7 +1513,7 @@ final class AXEventHandler {
     }
 
     private func shouldSuppressObservedManagedActivation(
-        entry observedEntry: WindowModel.Entry,
+        entry observedEntry: WindowState,
         requestDisposition: ActivationRequestDisposition,
         source: ActivationEventSource,
         origin: ActivationCallOrigin
@@ -1557,7 +1557,7 @@ final class AXEventHandler {
     }
 
     private func shouldSuppressObservedActivationDuringManagedReplacementFocusTransaction(
-        entry observedEntry: WindowModel.Entry,
+        entry observedEntry: WindowState,
         requestDisposition: ActivationRequestDisposition,
         source: ActivationEventSource,
         origin: ActivationCallOrigin
@@ -2181,7 +2181,7 @@ final class AXEventHandler {
 
     @discardableResult
     private func completeFocusedManagedAdmission(
-        entry: WindowModel.Entry,
+        entry: WindowState,
         isWorkspaceActive: Bool,
         activation: PendingFocusedManagedActivation,
         requestDisposition: ActivationRequestDisposition,
@@ -2258,7 +2258,7 @@ final class AXEventHandler {
     }
 
     func handleManagedAppActivation(
-        entry: WindowModel.Entry,
+        entry: WindowState,
         isWorkspaceActive: Bool,
         appFullscreen: Bool,
         source: ActivationEventSource = .focusedWindowChanged,
@@ -2442,7 +2442,7 @@ final class AXEventHandler {
     }
 
     @discardableResult
-    private func suspendManagedWindowForNativeFullscreen(_ entry: WindowModel.Entry) -> Bool {
+    private func suspendManagedWindowForNativeFullscreen(_ entry: WindowState) -> Bool {
         guard let controller else { return false }
         cancelNativeFullscreenLifecycleTasks(containing: entry.token)
         let changed = controller.workspaceManager.markNativeFullscreenSuspended(entry.token)
@@ -2458,7 +2458,7 @@ final class AXEventHandler {
     }
 
     @discardableResult
-    private func restoreManagedWindowFromNativeFullscreen(_ entry: WindowModel.Entry) -> Bool {
+    private func restoreManagedWindowFromNativeFullscreen(_ entry: WindowState) -> Bool {
         guard let controller else { return false }
         let hadRecord = controller.workspaceManager.nativeFullscreenRecord(for: entry.token) != nil
         guard hadRecord || controller.workspaceManager.layoutReason(for: entry.token) == .nativeFullscreen else {
@@ -2622,11 +2622,11 @@ final class AXEventHandler {
     private func nativeFullscreenOriginCandidate(
         for token: WindowToken,
         activeWorkspaceId: WorkspaceDescriptor.ID?
-    ) -> WindowModel.Entry? {
+    ) -> WindowState? {
         guard let controller else { return nil }
         let workspaceManager = controller.workspaceManager
 
-        func eligible(_ entry: WindowModel.Entry?) -> WindowModel.Entry? {
+        func eligible(_ entry: WindowState?) -> WindowState? {
             guard let entry,
                   entry.token != token,
                   entry.token.pid == token.pid,
@@ -2666,7 +2666,7 @@ final class AXEventHandler {
         windowId: UInt32,
         axRef: AXWindowRef,
         managedReplacementMetadata: ManagedReplacementMetadata? = nil
-    ) -> WindowModel.Entry? {
+    ) -> WindowState? {
         guard let controller else { return nil }
 
         guard let entry = controller.workspaceManager.rekeyWindow(
@@ -3355,7 +3355,7 @@ final class AXEventHandler {
     }
 
     private func cachedManagedReplacementMetadata(
-        for entry: WindowModel.Entry,
+        for entry: WindowState,
         fallbackBundleId: String?
     ) -> ManagedReplacementMetadata {
         var metadata = entry.managedReplacementMetadata ?? ManagedReplacementMetadata(
@@ -3810,7 +3810,7 @@ final class AXEventHandler {
         return nextManagedReplacementEventSequence
     }
 
-    private func updateManagedReplacementFrame(_ frame: CGRect, for entry: WindowModel.Entry) {
+    private func updateManagedReplacementFrame(_ frame: CGRect, for entry: WindowState) {
         guard let controller else { return }
         _ = controller.workspaceManager.updateManagedReplacementFrame(frame, for: entry.token)
     }

@@ -5,7 +5,7 @@ struct LayoutWindowSnapshot {
     let token: WindowToken
     let constraints: WindowSizeConstraints
     let layoutConstraints: WindowSizeConstraints
-    let hiddenState: WindowModel.HiddenState?
+    let hiddenState: HiddenState?
     let layoutReason: LayoutReason
 
     var isNativeFullscreenSuspended: Bool {
@@ -70,7 +70,7 @@ struct LayoutFrameChange {
 
 struct LayoutRestoreChange {
     let token: WindowToken
-    let hiddenState: WindowModel.HiddenState
+    let hiddenState: HiddenState
 }
 
 enum LayoutVisibilityChange {

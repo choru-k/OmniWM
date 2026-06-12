@@ -5,8 +5,8 @@ import Foundation
 enum WorkspaceBarDataSource {
     private struct WorkspaceSnapshot {
         let workspace: WorkspaceDescriptor
-        let tiledEntries: [WindowModel.Entry]
-        let floatingEntries: [WindowModel.Entry]
+        let tiledEntries: [WindowState]
+        let floatingEntries: [WindowState]
         let hasBarOccupancy: Bool
     }
 
@@ -152,7 +152,7 @@ enum WorkspaceBarDataSource {
     }
 
     private static func createWindowItems(
-        entries: [WindowModel.Entry],
+        entries: [WindowState],
         deduplicate: Bool,
         useLayoutOrder: Bool,
         appInfoCache: AppInfoCache,
@@ -175,13 +175,13 @@ enum WorkspaceBarDataSource {
     }
 
     private static func createDedupedWindowItems(
-        entries: [WindowModel.Entry],
+        entries: [WindowState],
         useLayoutOrder: Bool,
         appInfoCache: AppInfoCache,
         focusedToken: WindowToken?
     ) -> [WorkspaceBarWindowItem] {
         if useLayoutOrder {
-            var groupedByApp: [String: [WindowModel.Entry]] = [:]
+            var groupedByApp: [String: [WindowState]] = [:]
             var orderedAppNames: [String] = []
 
             for entry in entries {
@@ -252,7 +252,7 @@ enum WorkspaceBarDataSource {
     }
 
     private static func createIndividualWindowItems(
-        entries: [WindowModel.Entry],
+        entries: [WindowState],
         appInfoCache: AppInfoCache,
         focusedToken: WindowToken?
     ) -> [WorkspaceBarWindowItem] {
@@ -280,7 +280,7 @@ enum WorkspaceBarDataSource {
         }
     }
 
-    private static func windowTitle(for entry: WindowModel.Entry) -> String? {
+    private static func windowTitle(for entry: WindowState) -> String? {
         guard let title = AXWindowService.titlePreferFast(windowId: UInt32(entry.windowId)),
               !title.isEmpty else { return nil }
         return title

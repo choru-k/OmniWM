@@ -3,7 +3,7 @@ import Foundation
 enum EventNormalizer {
     static func normalize(
         event: WMEvent,
-        existingEntry: WindowModel.Entry?,
+        existingEntry: WindowState?,
         monitors _: [Monitor]
     ) -> WMEvent {
         switch event {

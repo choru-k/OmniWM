@@ -204,43 +204,43 @@ extension WorldStore {
         model.handle(for: token)
     }
 
-    func entry(for token: WindowToken) -> WindowModel.Entry? {
+    func entry(for token: WindowToken) -> WindowState? {
         model.entry(for: token)
     }
 
-    func entry(for handle: WindowHandle) -> WindowModel.Entry? {
+    func entry(for handle: WindowHandle) -> WindowState? {
         model.entry(for: handle)
     }
 
-    func entry(forPid pid: pid_t, windowId: Int) -> WindowModel.Entry? {
+    func entry(forPid pid: pid_t, windowId: Int) -> WindowState? {
         model.entry(forPid: pid, windowId: windowId)
     }
 
-    func entry(forWindowId windowId: Int) -> WindowModel.Entry? {
+    func entry(forWindowId windowId: Int) -> WindowState? {
         model.entry(forWindowId: windowId)
     }
 
-    func entry(forWindowId windowId: Int, inVisibleWorkspaces visibleIds: Set<WorkspaceDescriptor.ID>) -> WindowModel.Entry? {
+    func entry(forWindowId windowId: Int, inVisibleWorkspaces visibleIds: Set<WorkspaceDescriptor.ID>) -> WindowState? {
         model.entry(forWindowId: windowId, inVisibleWorkspaces: visibleIds)
     }
 
-    func entries(forPid pid: pid_t) -> [WindowModel.Entry] {
+    func entries(forPid pid: pid_t) -> [WindowState] {
         model.entries(forPid: pid)
     }
 
-    func windows(in workspace: WorkspaceDescriptor.ID) -> [WindowModel.Entry] {
+    func windows(in workspace: WorkspaceDescriptor.ID) -> [WindowState] {
         model.windows(in: workspace)
     }
 
-    func windows(in workspace: WorkspaceDescriptor.ID, mode: TrackedWindowMode) -> [WindowModel.Entry] {
+    func windows(in workspace: WorkspaceDescriptor.ID, mode: TrackedWindowMode) -> [WindowState] {
         model.windows(in: workspace, mode: mode)
     }
 
-    func allEntries() -> [WindowModel.Entry] {
+    func allEntries() -> [WindowState] {
         model.allEntries()
     }
 
-    func allEntries(mode: TrackedWindowMode) -> [WindowModel.Entry] {
+    func allEntries(mode: TrackedWindowMode) -> [WindowState] {
         model.allEntries(mode: mode)
     }
 
@@ -276,7 +276,7 @@ extension WorldStore {
         model.managedReplacementMetadata(for: token)
     }
 
-    func floatingState(for token: WindowToken) -> WindowModel.FloatingState? {
+    func floatingState(for token: WindowToken) -> FloatingState? {
         model.floatingState(for: token)
     }
 
@@ -284,7 +284,7 @@ extension WorldStore {
         model.manualLayoutOverride(for: token)
     }
 
-    func hiddenState(for token: WindowToken) -> WindowModel.HiddenState? {
+    func hiddenState(for token: WindowToken) -> HiddenState? {
         model.hiddenState(for: token)
     }
 
@@ -345,7 +345,7 @@ extension WorldStore {
         model.setMode(mode, for: token)
     }
 
-    func setFloatingState(_ state: WindowModel.FloatingState?, for token: WindowToken) {
+    func setFloatingState(_ state: FloatingState?, for token: WindowToken) {
         assertInCommit("setFloatingState")
         model.setFloatingState(state, for: token)
     }

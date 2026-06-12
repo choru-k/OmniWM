@@ -915,7 +915,7 @@ final class WMController {
         restrictWorkspaceRuleToPlacementMonitor: Bool,
         createPlacementContext: WindowCreatePlacementContext?,
         windowFrame: CGRect?,
-        existingEntry: WindowModel.Entry?,
+        existingEntry: WindowState?,
         fallbackWorkspaceId: WorkspaceDescriptor.ID?,
         context: WindowRuleReevaluationContext
     ) -> WorkspaceDescriptor.ID {
@@ -1300,14 +1300,14 @@ final class WMController {
         )
     }
 
-    private func liveFrame(for entry: WindowModel.Entry) -> CGRect? {
+    private func liveFrame(for entry: WindowState) -> CGRect? {
         AXWindowService.framePreferFast(entry.axRef)
             ?? axManager.lastAppliedFrame(for: entry.windowId)
             ?? (try? AXWindowService.frame(entry.axRef))
     }
 
     private func floatingPlacementMonitor(
-        for entry: WindowModel.Entry,
+        for entry: WindowState,
         preferredMonitor: Monitor? = nil,
         frame: CGRect? = nil
     ) -> Monitor? {
@@ -1340,7 +1340,7 @@ final class WMController {
     }
 
     private func initialFloatingFrame(
-        for entry: WindowModel.Entry,
+        for entry: WindowState,
         preferredMonitor: Monitor?
     ) -> CGRect? {
         guard let frame = liveFrame(for: entry) else { return nil }
@@ -1356,7 +1356,7 @@ final class WMController {
     }
 
     private func targetFloatingFrame(
-        for entry: WindowModel.Entry,
+        for entry: WindowState,
         preferredMonitor: Monitor?
     ) -> CGRect? {
         if let floatingState = workspaceManager.floatingState(for: entry.token),
@@ -1632,7 +1632,7 @@ final class WMController {
     }
 
     private func hideScratchpadWindow(
-        _ entry: WindowModel.Entry,
+        _ entry: WindowState,
         monitor: Monitor
     ) {
         // Hold an AX reference before hiding so reveal can still resolve windows
@@ -1660,7 +1660,7 @@ final class WMController {
 
     @discardableResult
     private func showScratchpadWindow(
-        _ entry: WindowModel.Entry,
+        _ entry: WindowState,
         on workspaceId: WorkspaceDescriptor.ID,
         monitor: Monitor
     ) -> Bool {
@@ -1767,7 +1767,7 @@ final class WMController {
 
     func trackedModeForLifecycle(
         decision: WindowDecision,
-        existingEntry: WindowModel.Entry?
+        existingEntry: WindowState?
     ) -> TrackedWindowMode? {
         if let trackedMode = decision.trackedMode {
             return trackedMode
@@ -1780,7 +1780,7 @@ final class WMController {
 
     func trackedModePreservingAutomaticFallbackState(
         decision: WindowDecision,
-        existingEntry: WindowModel.Entry?,
+        existingEntry: WindowState?,
         context: WindowRuleReevaluationContext
     ) -> TrackedWindowMode? {
         guard let trackedMode = trackedModeForLifecycle(
@@ -1840,7 +1840,7 @@ final class WMController {
     func resolvedWorkspaceId(
         for evaluation: WindowDecisionEvaluation,
         axRef: AXWindowRef,
-        existingEntry: WindowModel.Entry?,
+        existingEntry: WindowState?,
         fallbackWorkspaceId: WorkspaceDescriptor.ID?,
         structuralReplacementWorkspaceId: WorkspaceDescriptor.ID? = nil,
         restrictWorkspaceRuleToPlacementMonitor: Bool = true,
@@ -2374,7 +2374,7 @@ final class WMController {
     private func applyManagedWindowOverride(
         _ override: ManualWindowOverride?,
         for token: WindowToken,
-        entry: WindowModel.Entry
+        entry: WindowState
     ) {
         workspaceManager.setManualLayoutOverride(override, for: token)
         let entry = workspaceManager.entry(for: token) ?? entry
@@ -2440,15 +2440,15 @@ final class WMController {
             return .notFound
         }
 
-        let entry = workspaceManager.entry(for: scratchpadToken) ?? entry
-        if entry.workspaceId == target.workspaceId,
-           isManagedWindowDisplayable(entry.token)
+        let liveEntry = workspaceManager.entry(for: scratchpadToken) ?? entry
+        if liveEntry.workspaceId == target.workspaceId,
+           isManagedWindowDisplayable(liveEntry.token)
         {
-            hideScratchpadWindow(entry, monitor: target.monitor)
+            hideScratchpadWindow(liveEntry, monitor: target.monitor)
             return .executed
         }
 
-        let started = showScratchpadWindow(entry, on: target.workspaceId, monitor: target.monitor)
+        let started = showScratchpadWindow(liveEntry, on: target.workspaceId, monitor: target.monitor)
         return started ? .executed : .notFound
     }
 
@@ -2586,7 +2586,7 @@ final class WMController {
         let rescuePlan = restorePlanner.planFloatingRescue(candidates)
         var frameUpdates: [(pid: pid_t, windowId: Int, frame: CGRect)] = []
         var visibleJobs: [(pid: pid_t, windowId: Int)] = []
-        var rescuedEntries: [WindowModel.Entry] = []
+        var rescuedEntries: [WindowState] = []
 
         for operation in rescuePlan.operations {
             guard let entry = workspaceManager.entry(for: operation.token) else { continue }
@@ -2829,7 +2829,7 @@ extension WMController {
     }
 
     @discardableResult
-    private func selectNativeFullscreenPlaceholder(_ entry: WindowModel.Entry) -> Bool {
+    private func selectNativeFullscreenPlaceholder(_ entry: WindowState) -> Bool {
         let token = entry.token
         let changed = workspaceManager.selectNativeFullscreenPlaceholder(
             token,

@@ -45,154 +45,13 @@ final class WindowModel {
         let mode: TrackedWindowMode
     }
 
-    enum HiddenReason: Equatable {
-        case workspaceInactive
-        case layoutTransient(HideSide)
-        case scratchpad
-    }
-
-    struct HiddenState: Equatable {
-        let proportionalPosition: CGPoint
-        let referenceMonitorId: Monitor.ID?
-        let reason: HiddenReason
-
-        var workspaceInactive: Bool {
-            if case .workspaceInactive = reason {
-                return true
-            }
-            return false
-        }
-
-        var offscreenSide: HideSide? {
-            if case let .layoutTransient(side) = reason {
-                return side
-            }
-            return nil
-        }
-
-        var isScratchpad: Bool {
-            if case .scratchpad = reason {
-                return true
-            }
-            return false
-        }
-
-        var restoresViaFloatingState: Bool {
-            switch reason {
-            case .workspaceInactive,
-                 .scratchpad:
-                true
-            case .layoutTransient:
-                false
-            }
-        }
-
-        init(
-            proportionalPosition: CGPoint,
-            referenceMonitorId: Monitor.ID?,
-            reason: HiddenReason
-        ) {
-            self.proportionalPosition = proportionalPosition
-            self.referenceMonitorId = referenceMonitorId
-            self.reason = reason
-        }
-
-        init(
-            proportionalPosition: CGPoint,
-            referenceMonitorId: Monitor.ID?,
-            workspaceInactive: Bool,
-            offscreenSide: HideSide? = nil
-        ) {
-            self.proportionalPosition = proportionalPosition
-            self.referenceMonitorId = referenceMonitorId
-            if workspaceInactive {
-                reason = .workspaceInactive
-            } else if let offscreenSide {
-                reason = .layoutTransient(offscreenSide)
-            } else {
-                reason = .scratchpad
-            }
-        }
-    }
-
-    struct FloatingState: Equatable {
-        var lastFrame: CGRect
-        var normalizedOrigin: CGPoint?
-        var referenceMonitorId: Monitor.ID?
-        var restoreToFloating: Bool
-
-        init(
-            lastFrame: CGRect,
-            normalizedOrigin: CGPoint?,
-            referenceMonitorId: Monitor.ID?,
-            restoreToFloating: Bool
-        ) {
-            self.lastFrame = lastFrame
-            self.normalizedOrigin = normalizedOrigin
-            self.referenceMonitorId = referenceMonitorId
-            self.restoreToFloating = restoreToFloating
-        }
-    }
-
-    final class Entry {
-        var token: WindowToken
-        var axRef: AXWindowRef
-        var workspaceId: WorkspaceDescriptor.ID
-        var mode: TrackedWindowMode
-        var lifecyclePhase: WindowLifecyclePhase
-        var observedState: ObservedWindowState
-        var desiredState: DesiredWindowState
-        var restoreIntent: RestoreIntent?
-        var replacementCorrelation: ReplacementCorrelation?
-        var managedReplacementMetadata: ManagedReplacementMetadata?
-        var floatingState: FloatingState?
-        var manualLayoutOverride: ManualWindowOverride?
-        var ruleEffects: ManagedWindowRuleEffects = .none
-        var hiddenState: HiddenState?
-        var layoutReason: LayoutReason = .standard
-
-        var pid: pid_t {
-            token.pid
-        }
-
-        var windowId: Int {
-            token.windowId
-        }
-
-        init(
-            token: WindowToken,
-            axRef: AXWindowRef,
-            workspaceId: WorkspaceDescriptor.ID,
-            mode: TrackedWindowMode,
-            managedReplacementMetadata: ManagedReplacementMetadata?,
-            ruleEffects: ManagedWindowRuleEffects
-        ) {
-            self.token = token
-            self.axRef = axRef
-            self.workspaceId = workspaceId
-            self.mode = mode
-            lifecyclePhase = mode == .floating ? .floating : .tiled
-            observedState = .initial(
-                workspaceId: workspaceId,
-                monitorId: nil
-            )
-            desiredState = .initial(
-                workspaceId: workspaceId,
-                monitorId: nil,
-                disposition: mode
-            )
-            self.managedReplacementMetadata = managedReplacementMetadata
-            self.ruleEffects = ruleEffects
-        }
-    }
-
     private struct ConstraintsCacheRecord {
         let constraints: WindowSizeConstraints
         let cachedAt: Date
     }
 
-    private(set) var entries: [WindowToken: Entry] = [:]
-    private var entryByWindowId: [Int: Entry] = [:]
+    private(set) var entries: [WindowToken: WindowState] = [:]
+    private var windowIdToToken: [Int: WindowToken] = [:]
     private var handleByToken: [WindowToken: WindowHandle] = [:]
     private var constraintsCacheByToken: [WindowToken: ConstraintsCacheRecord] = [:]
     private var observedMinSizeByToken: [WindowToken: CGSize] = [:]
@@ -267,9 +126,9 @@ final class WindowModel {
         tokenIndexByKey[key] = indexByToken
     }
 
-    private func appendIndexes(for entry: Entry) {
+    private func appendIndexes(for entry: WindowState) {
         let token = entry.token
-        entryByWindowId[entry.windowId] = entry
+        windowIdToToken[entry.windowId] = token
         appendToken(
             token,
             to: entry.workspaceId,
@@ -285,11 +144,11 @@ final class WindowModel {
         appendToken(token, to: entry.pid, tokensByKey: &tokensByPid, tokenIndexByKey: &tokenIndexByPid)
     }
 
-    private func removeIndexes(for entry: Entry, token: WindowToken? = nil, windowId: Int? = nil) {
+    private func removeIndexes(for entry: WindowState, token: WindowToken? = nil, windowId: Int? = nil) {
         let token = token ?? entry.token
         let windowId = windowId ?? entry.windowId
 
-        entryByWindowId.removeValue(forKey: windowId)
+        windowIdToToken.removeValue(forKey: windowId)
         removeToken(
             token,
             from: entry.workspaceId,
@@ -305,9 +164,9 @@ final class WindowModel {
         removeToken(token, from: token.pid, tokensByKey: &tokensByPid, tokenIndexByKey: &tokenIndexByPid)
     }
 
-    private func rekeyIndexes(for entry: Entry, from oldToken: WindowToken, to newToken: WindowToken) {
-        entryByWindowId.removeValue(forKey: oldToken.windowId)
-        entryByWindowId[newToken.windowId] = entry
+    private func rekeyIndexes(for entry: WindowState, from oldToken: WindowToken, to newToken: WindowToken) {
+        windowIdToToken.removeValue(forKey: oldToken.windowId)
+        windowIdToToken[newToken.windowId] = newToken
 
         replaceToken(
             from: oldToken,
@@ -349,22 +208,22 @@ final class WindowModel {
         managedReplacementMetadata: ManagedReplacementMetadata? = nil
     ) -> WindowToken {
         let token = WindowToken(pid: pid, windowId: windowId)
-        if let entry = entries[token] {
-            entry.axRef = window
+        if entries[token] != nil {
+            entries[token]?.axRef = window
             updateWorkspace(for: token, workspace: workspace)
             setMode(mode, for: token)
             if let managedReplacementMetadata {
-                entry.managedReplacementMetadata = managedReplacementMetadata
+                entries[token]?.managedReplacementMetadata = managedReplacementMetadata
             }
-            if entry.ruleEffects != ruleEffects {
-                entry.ruleEffects = ruleEffects
+            if entries[token]?.ruleEffects != ruleEffects {
+                entries[token]?.ruleEffects = ruleEffects
                 constraintsCacheByToken.removeValue(forKey: token)
             }
             missingDetectionCountByToken.removeValue(forKey: token)
             return token
         }
 
-        let entry = Entry(
+        let entry = WindowState(
             token: token,
             axRef: window,
             workspaceId: workspace,
@@ -385,19 +244,19 @@ final class WindowModel {
         to newToken: WindowToken,
         newAXRef: AXWindowRef,
         managedReplacementMetadata: ManagedReplacementMetadata? = nil
-    ) -> Entry? {
+    ) -> WindowState? {
         if oldToken == newToken {
-            guard let entry = entries[oldToken] else { return nil }
-            entry.axRef = newAXRef
+            guard entries[oldToken] != nil else { return nil }
+            entries[oldToken]?.axRef = newAXRef
             constraintsCacheByToken.removeValue(forKey: oldToken)
             if let managedReplacementMetadata {
-                entry.managedReplacementMetadata = managedReplacementMetadata
+                entries[oldToken]?.managedReplacementMetadata = managedReplacementMetadata
             }
-            return entry
+            return entries[oldToken]
         }
 
         guard entries[newToken] == nil,
-              let entry = entries.removeValue(forKey: oldToken)
+              var entry = entries.removeValue(forKey: oldToken)
         else {
             return nil
         }
@@ -453,10 +312,10 @@ final class WindowModel {
                 tokenIndexByKey: &tokenIndexByWorkspaceMode
             )
         }
-        entry.workspaceId = workspace
+        entries[token]?.workspaceId = workspace
     }
 
-    func windows(in workspace: WorkspaceDescriptor.ID) -> [Entry] {
+    func windows(in workspace: WorkspaceDescriptor.ID) -> [WindowState] {
         guard let tokens = tokensByWorkspace[workspace] else { return [] }
         return tokens.compactMap { entries[$0] }
     }
@@ -464,7 +323,7 @@ final class WindowModel {
     func windows(
         in workspace: WorkspaceDescriptor.ID,
         mode: TrackedWindowMode
-    ) -> [Entry] {
+    ) -> [WindowState] {
         let key = WorkspaceModeKey(workspaceId: workspace, mode: mode)
         guard let tokens = tokensByWorkspaceMode[key] else { return [] }
         return tokens.compactMap { entries[$0] }
@@ -474,38 +333,38 @@ final class WindowModel {
         entries[token]?.workspaceId
     }
 
-    func entry(for token: WindowToken) -> Entry? {
+    func entry(for token: WindowToken) -> WindowState? {
         entries[token]
     }
 
-    func entry(for handle: WindowHandle) -> Entry? {
+    func entry(for handle: WindowHandle) -> WindowState? {
         entry(for: handle.id)
     }
 
-    func entry(forPid pid: pid_t, windowId: Int) -> Entry? {
+    func entry(forPid pid: pid_t, windowId: Int) -> WindowState? {
         entry(for: WindowToken(pid: pid, windowId: windowId))
     }
 
-    func entries(forPid pid: pid_t) -> [Entry] {
+    func entries(forPid pid: pid_t) -> [WindowState] {
         guard let tokens = tokensByPid[pid] else { return [] }
         return tokens.compactMap { entries[$0] }
     }
 
-    func entry(forWindowId windowId: Int) -> Entry? {
-        entryByWindowId[windowId]
+    func entry(forWindowId windowId: Int) -> WindowState? {
+        windowIdToToken[windowId].flatMap { entries[$0] }
     }
 
-    func entry(forWindowId windowId: Int, inVisibleWorkspaces visibleIds: Set<WorkspaceDescriptor.ID>) -> Entry? {
-        guard let entry = entryByWindowId[windowId],
+    func entry(forWindowId windowId: Int, inVisibleWorkspaces visibleIds: Set<WorkspaceDescriptor.ID>) -> WindowState? {
+        guard let entry = entry(forWindowId: windowId),
               visibleIds.contains(entry.workspaceId) else { return nil }
         return entry
     }
 
-    func allEntries() -> [Entry] {
+    func allEntries() -> [WindowState] {
         Array(entries.values)
     }
 
-    func allEntries(mode: TrackedWindowMode) -> [Entry] {
+    func allEntries(mode: TrackedWindowMode) -> [WindowState] {
         tokensByWorkspaceMode
             .filter { $0.key.mode == mode }
             .values
@@ -518,14 +377,13 @@ final class WindowModel {
 
     func setMode(_ mode: TrackedWindowMode, for token: WindowToken) {
         guard let entry = entries[token], entry.mode != mode else { return }
-        let oldMode = entry.mode
         removeToken(
             token,
-            from: WorkspaceModeKey(workspaceId: entry.workspaceId, mode: oldMode),
+            from: WorkspaceModeKey(workspaceId: entry.workspaceId, mode: entry.mode),
             tokensByKey: &tokensByWorkspaceMode,
             tokenIndexByKey: &tokenIndexByWorkspaceMode
         )
-        entry.mode = mode
+        entries[token]?.mode = mode
         appendToken(
             token,
             to: WorkspaceModeKey(workspaceId: entry.workspaceId, mode: mode),
@@ -627,7 +485,7 @@ final class WindowModel {
         guard let entry = entries[token],
               entry.layoutReason != .standard
         else { return false }
-        entry.layoutReason = .standard
+        entries[token]?.layoutReason = .standard
         return true
     }
 
@@ -665,7 +523,7 @@ final class WindowModel {
     }
 
     @discardableResult
-    func removeWindow(key: WindowKey) -> Entry? {
+    func removeWindow(key: WindowKey) -> WindowState? {
         missingDetectionCountByToken.removeValue(forKey: key)
         handleByToken.removeValue(forKey: key)
         constraintsCacheByToken.removeValue(forKey: key)

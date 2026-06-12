@@ -9,9 +9,9 @@ enum WorkspaceEntryOrdering {
     }
 
     static func orderedEntries(
-        _ entries: [WindowModel.Entry],
+        _ entries: [WindowState],
         topology: LayoutTopology
-    ) -> [WindowModel.Entry] {
+    ) -> [WindowState] {
         guard topology.hasColumns else { return entries }
 
         var orderMap: [WindowToken: SortKey] = [:]

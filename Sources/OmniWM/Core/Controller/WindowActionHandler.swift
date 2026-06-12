@@ -10,7 +10,7 @@ final class WindowActionHandler {
 
     @MainActor
     private enum RaisableSurface {
-        case managed(WindowModel.Entry)
+        case managed(WindowState)
         case external(pid: pid_t, windowId: Int, axRef: AXWindowRef)
         case owned(NSWindow)
 

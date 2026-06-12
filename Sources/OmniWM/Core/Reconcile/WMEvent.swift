@@ -139,7 +139,7 @@ enum WMEvent: Equatable {
     case floatingStateChanged(
         token: WindowToken,
         workspaceId: WorkspaceDescriptor.ID,
-        state: WindowModel.FloatingState?,
+        state: FloatingState?,
         source: WMEventSource
     )
     case manualLayoutOverrideChanged(
@@ -156,7 +156,7 @@ enum WMEvent: Equatable {
         token: WindowToken,
         workspaceId: WorkspaceDescriptor.ID,
         monitorId: Monitor.ID?,
-        hiddenState: WindowModel.HiddenState?,
+        hiddenState: HiddenState?,
         source: WMEventSource
     )
     case nativeFullscreenTransition(

@@ -41,7 +41,7 @@ struct WorldView {
         BorderConfig.from(settings: controller.settings)
     }
 
-    func entry(for token: WindowToken) -> WindowModel.Entry? {
+    func entry(for token: WindowToken) -> WindowState? {
         controller.workspaceManager.entry(for: token)
     }
 
