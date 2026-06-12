@@ -53,10 +53,23 @@ final class ViewGesture {
     }
 }
 
-enum ViewOffset {
+enum ViewOffset: Equatable {
     case `static`(CGFloat)
     case gesture(ViewGesture)
     case spring(SpringAnimation)
+
+    static func == (lhs: ViewOffset, rhs: ViewOffset) -> Bool {
+        switch (lhs, rhs) {
+        case let (.static(lhsOffset), .static(rhsOffset)):
+            lhsOffset == rhsOffset
+        case let (.gesture(lhsGesture), .gesture(rhsGesture)):
+            lhsGesture === rhsGesture
+        case let (.spring(lhsAnimation), .spring(rhsAnimation)):
+            lhsAnimation === rhsAnimation
+        default:
+            false
+        }
+    }
 
     func current() -> CGFloat {
         switch self {
@@ -146,7 +159,7 @@ enum ViewOffset {
     }
 }
 
-struct ViewportState {
+struct ViewportState: Equatable {
     var activeColumnIndex: Int = 0
 
     var viewOffsetPixels: ViewOffset = .static(0.0)
@@ -162,8 +175,6 @@ struct ViewportState {
     var activatePrevColumnOnRemoval: CGFloat?
 
     let springConfig: SpringConfig = .niriHorizontalViewMovement
-
-    var animationClock: AnimationClock?
 
     var displayRefreshRate: Double = 60.0
 }

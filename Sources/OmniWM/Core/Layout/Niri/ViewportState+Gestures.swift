@@ -62,7 +62,7 @@ extension ViewportState {
         }
 
         let currentOffsetForFallback = gesture.current()
-        let now = timestamp ?? animationClock?.now() ?? CACurrentMediaTime()
+        let now = timestamp ?? CACurrentMediaTime()
         gesture.tracker.push(delta: 0, timestamp: now)
 
         let normFactor = gesture.isTrackpad

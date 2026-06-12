@@ -208,7 +208,6 @@ final class WorkspaceManager {
     private var _cachedVisibleWorkspaceIds: Set<WorkspaceDescriptor.ID>?
     private var _cachedVisibleWorkspaceMap: [Monitor.ID: WorkspaceDescriptor.ID]?
     private var _cachedMonitorIdByVisibleWorkspace: [WorkspaceDescriptor.ID: Monitor.ID]?
-    var animationClock: AnimationClock?
     private var sessionState = SessionState()
 
     var onGapsChanged: (() -> Void)?
@@ -3008,12 +3007,7 @@ final class WorkspaceManager {
     }
 
     func niriViewportState(for workspaceId: WorkspaceDescriptor.ID) -> ViewportState {
-        if let state = sessionState.workspaceSessions[workspaceId]?.niriViewportState {
-            return state
-        }
-        var newState = ViewportState()
-        newState.animationClock = animationClock
-        return newState
+        sessionState.workspaceSessions[workspaceId]?.niriViewportState ?? ViewportState()
     }
 
     func updateNiriViewportState(
@@ -3071,17 +3065,6 @@ final class WorkspaceManager {
         var state = niriViewportState(for: workspaceId)
         mutate(&state)
         updateNiriViewportState(state, for: workspaceId)
-    }
-
-    func setSelection(_ nodeId: NodeId?, for workspaceId: WorkspaceDescriptor.ID) {
-        withNiriViewportState(for: workspaceId) { $0.selectedNodeId = nodeId }
-    }
-
-    func updateAnimationClock(_ clock: AnimationClock?) {
-        animationClock = clock
-        for workspaceId in sessionState.workspaceSessions.keys {
-            sessionState.workspaceSessions[workspaceId]?.niriViewportState?.animationClock = clock
-        }
     }
 
     func garbageCollectUnusedWorkspaces(focusedWorkspaceId: WorkspaceDescriptor.ID?) {

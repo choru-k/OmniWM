@@ -1,6 +1,6 @@
 import Foundation
 
-struct SpringConfig {
+struct SpringConfig: Equatable {
     let dampingRatio: Double
     let stiffness: Double
     let epsilon: Double

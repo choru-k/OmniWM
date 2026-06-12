@@ -43,6 +43,7 @@ extension NiriLayoutEngine {
             gap: gaps,
             viewportWidth: workingFrame.width,
             motion: motion,
+            clock: animationClock,
             animate: false,
             centerMode: settings.centerFocusedColumn,
             alwaysCenterSingleColumn: settings.alwaysCenterSingleColumn,

@@ -227,6 +227,7 @@ extension NiriLayoutEngine {
             gap: gaps,
             viewportSpan: viewportSpan,
             motion: motion,
+            clock: animationClock,
             sizeKeyPath: sizeKeyPath,
             animate: true,
             centerMode: settings.centerFocusedColumn,

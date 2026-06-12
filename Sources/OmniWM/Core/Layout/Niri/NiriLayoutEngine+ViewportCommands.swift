@@ -31,6 +31,7 @@ extension NiriLayoutEngine {
         state.animateToOffset(
             targetOffset,
             motion: motion,
+            clock: animationClock,
             scale: scale
         )
         return true
@@ -106,6 +107,7 @@ extension NiriLayoutEngine {
         state.animateToOffset(
             targetOffset,
             motion: motion,
+            clock: animationClock,
             scale: scale
         )
 
@@ -115,6 +117,7 @@ extension NiriLayoutEngine {
             gap: gaps,
             viewportSpan: viewportWidth,
             motion: motion,
+            clock: animationClock,
             sizeKeyPath: \.cachedWidth,
             centerMode: settings.centerFocusedColumn,
             alwaysCenterSingleColumn: settings.alwaysCenterSingleColumn,
