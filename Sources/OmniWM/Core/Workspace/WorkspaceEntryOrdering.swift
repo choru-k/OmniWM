@@ -10,11 +10,15 @@ enum WorkspaceEntryOrdering {
 
     static func orderedEntries(
         _ entries: [WindowModel.Entry],
-        in workspaceId: WorkspaceDescriptor.ID,
-        engine: NiriLayoutEngine?
+        topology: LayoutTopology
     ) -> [WindowModel.Entry] {
-        guard let orderMap = orderMap(for: workspaceId, engine: engine) else {
-            return entries
+        guard topology.hasColumns else { return entries }
+
+        var orderMap: [WindowToken: SortKey] = [:]
+        for (columnIndex, column) in topology.columns.enumerated() {
+            for (rowIndex, tile) in column.tiles.enumerated() {
+                orderMap[tile.token] = SortKey(group: 0, primary: columnIndex, secondary: rowIndex)
+            }
         }
 
         let fallbackOrder = Dictionary(uniqueKeysWithValues: entries.enumerated()
@@ -32,23 +36,5 @@ enum WorkspaceEntryOrdering {
             let rhsFallback = fallbackOrder[rhs.handle.id] ?? 0
             return lhsFallback < rhsFallback
         }
-    }
-
-    private static func orderMap(
-        for workspaceId: WorkspaceDescriptor.ID,
-        engine: NiriLayoutEngine?
-    ) -> [WindowToken: SortKey]? {
-        guard let engine else { return nil }
-
-        var order: [WindowToken: SortKey] = [:]
-        let columns = engine.columns(in: workspaceId)
-
-        for (columnIndex, column) in columns.enumerated() {
-            for (rowIndex, window) in column.windowNodes.enumerated() {
-                order[window.handle.id] = SortKey(group: 0, primary: columnIndex, secondary: rowIndex)
-            }
-        }
-
-        return order
     }
 }

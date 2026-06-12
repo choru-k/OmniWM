@@ -356,6 +356,13 @@ extension WorldStore {
         return mutate(&focus)
     }
 
+    func layoutTopology(for workspaceId: WorkspaceDescriptor.ID) -> LayoutTopology {
+        LayoutTopology(
+            columns: niriEngine?.topologyColumns(in: workspaceId) ?? [],
+            dwindleFullscreenTokens: dwindleEngine?.fullscreenTokens(in: workspaceId) ?? []
+        )
+    }
+
     func installNiriEngine(_ engine: NiriLayoutEngine?) {
         niriEngine = engine
     }

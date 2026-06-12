@@ -3025,6 +3025,10 @@ final class WorkspaceManager {
         set { world.installDwindleEngine(newValue) }
     }
 
+    func layoutTopology(for workspaceId: WorkspaceDescriptor.ID) -> LayoutTopology {
+        world.layoutTopology(for: workspaceId)
+    }
+
     func niriViewportState(for workspaceId: WorkspaceDescriptor.ID) -> ViewportState {
         world.viewports[workspaceId] ?? ViewportState()
     }

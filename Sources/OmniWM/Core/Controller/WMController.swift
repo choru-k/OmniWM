@@ -542,7 +542,6 @@ final class WMController {
             options: options,
             workspaceManager: workspaceManager,
             appInfoCache: appInfoCache,
-            niriEngine: niriEngine,
             focusedToken: workspaceManager.focusedToken,
             settings: settings
         )
@@ -557,7 +556,6 @@ final class WMController {
             options: options,
             workspaceManager: workspaceManager,
             appInfoCache: appInfoCache,
-            niriEngine: niriEngine,
             focusedToken: workspaceManager.focusedToken,
             settings: settings
         )

@@ -136,8 +136,7 @@ final class IPCQueryRouter {
         let windows = orderedWorkspaces().flatMap { workspace in
             WorkspaceEntryOrdering.orderedEntries(
                 controller.workspaceManager.entries(in: workspace.id),
-                in: workspace.id,
-                engine: controller.niriEngine
+                topology: controller.workspaceManager.layoutTopology(for: workspace.id)
             )
             .filter { entry in
                 matchesWindowQuery(

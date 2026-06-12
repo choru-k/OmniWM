@@ -695,18 +695,15 @@ final class AXEventHandler {
     ) -> WindowToken? {
         guard let controller else { return nil }
         let state = controller.workspaceManager.niriViewportState(for: workspaceId)
-        guard let selectedNodeId = state.selectedNodeId,
-              let node = controller.niriEngine?.findNode(by: selectedNodeId) as? NiriWindow
-        else {
-            return nil
-        }
-        return node.token
+        guard let selectedNodeId = state.selectedNodeId else { return nil }
+        return controller.workspaceManager.layoutTopology(for: workspaceId).token(for: selectedNodeId)
     }
 
     private func niriManagedFocusAnchor(
         for key: ManagedReplacementFocusKey
     ) -> WindowToken? {
         guard let controller else { return nil }
+        let topology = controller.workspaceManager.layoutTopology(for: key.workspaceId)
 
         func eligible(_ token: WindowToken?) -> Bool {
             guard let token,
@@ -714,7 +711,7 @@ final class AXEventHandler {
                   let entry = controller.workspaceManager.entry(for: token),
                   entry.workspaceId == key.workspaceId,
                   entry.mode == .tiling,
-                  controller.niriEngine?.findNode(for: token) != nil
+                  topology.containsNiriWindow(token)
             else {
                 return false
             }

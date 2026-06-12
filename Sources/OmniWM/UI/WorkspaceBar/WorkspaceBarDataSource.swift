@@ -15,7 +15,6 @@ enum WorkspaceBarDataSource {
         options: WorkspaceBarProjectionOptions,
         workspaceManager: WorkspaceManager,
         appInfoCache: AppInfoCache,
-        niriEngine: NiriLayoutEngine?,
         focusedToken: WindowToken?,
         settings: SettingsStore
     ) -> [WorkspaceBarItem] {
@@ -24,7 +23,6 @@ enum WorkspaceBarDataSource {
             options: options,
             workspaceManager: workspaceManager,
             appInfoCache: appInfoCache,
-            niriEngine: niriEngine,
             focusedToken: focusedToken,
             settings: settings
         )
@@ -35,7 +33,6 @@ enum WorkspaceBarDataSource {
         options: WorkspaceBarProjectionOptions,
         workspaceManager: WorkspaceManager,
         appInfoCache: AppInfoCache,
-        niriEngine: NiriLayoutEngine?,
         focusedToken: WindowToken?,
         settings: SettingsStore
     ) -> WorkspaceBarProjection {
@@ -45,7 +42,6 @@ enum WorkspaceBarDataSource {
                 options: options,
                 workspaceManager: workspaceManager,
                 appInfoCache: appInfoCache,
-                niriEngine: niriEngine,
                 focusedToken: focusedToken,
                 settings: settings
             ),
@@ -63,7 +59,6 @@ enum WorkspaceBarDataSource {
         options: WorkspaceBarProjectionOptions,
         workspaceManager: WorkspaceManager,
         appInfoCache: AppInfoCache,
-        niriEngine: NiriLayoutEngine?,
         focusedToken: WindowToken?,
         settings: SettingsStore
     ) -> [WorkspaceBarItem] {
@@ -90,17 +85,16 @@ enum WorkspaceBarDataSource {
         let activeWorkspaceId = workspaceManager.activeWorkspace(on: monitor.id)?.id
 
         return workspaces.map { snapshot in
+            let topology = workspaceManager.layoutTopology(for: snapshot.workspace.id)
             let orderedTiledEntries = WorkspaceEntryOrdering.orderedEntries(
                 snapshot.tiledEntries,
-                in: snapshot.workspace.id,
-                engine: niriEngine
+                topology: topology
             )
             let orderedFloatingEntries = WorkspaceEntryOrdering.orderedEntries(
                 snapshot.floatingEntries,
-                in: snapshot.workspace.id,
-                engine: niriEngine
+                topology: topology
             )
-            let useLayoutOrder = niriEngine.map { !$0.columns(in: snapshot.workspace.id).isEmpty } ?? false
+            let useLayoutOrder = topology.hasColumns
             let tiledWindows = createWindowItems(
                 entries: orderedTiledEntries,
                 deduplicate: options.deduplicateAppIcons,

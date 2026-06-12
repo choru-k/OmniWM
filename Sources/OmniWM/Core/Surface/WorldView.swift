@@ -50,10 +50,8 @@ struct WorldView {
     }
 
     func isWindowFullscreenInLayout(_ token: WindowToken) -> Bool {
-        if controller.niriEngine?.findNode(for: token)?.isFullscreen == true {
-            return true
-        }
-        return controller.dwindleEngine?.findNode(for: token)?.isFullscreen == true
+        guard let workspaceId = controller.workspaceManager.entry(for: token)?.workspaceId else { return false }
+        return controller.workspaceManager.layoutTopology(for: workspaceId).isFullscreen(token)
     }
 
     func isManagedWindowDisplayable(_ handle: WindowHandle) -> Bool {
