@@ -725,7 +725,7 @@ enum NiriWindowMoveResult {
                 }
 
                 let shouldRestorePrevOffset = newColIdx == state.activeColumnIndex + 1
-                let offsetBeforeActivation = state.stationary()
+                let offsetBeforeActivation = state.viewOffset
 
                 pass.engine.ensureSelectionVisible(
                     node: newNode,
@@ -1147,7 +1147,6 @@ enum NiriWindowMoveResult {
                 plannedSeq: controller.workspaceManager.worldSeq
             )
         )
-        let updatedState = controller.workspaceManager.niriViewportState(for: workspaceId)
         if controller.workspaceManager.animationDriver.hasMotion(in: workspaceId)
             || engine.hasAnyWindowAnimationsRunning(in: workspaceId)
         {

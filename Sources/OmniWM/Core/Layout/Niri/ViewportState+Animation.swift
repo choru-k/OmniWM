@@ -6,18 +6,6 @@ extension ViewportState {
         columnX(at: activeColumnIndex, columns: columns, gap: gap) + viewOffset
     }
 
-    func targetViewPosPixels(columns: [NiriContainer], gap: CGFloat) -> CGFloat {
-        viewPosPixels(columns: columns, gap: gap)
-    }
-
-    func currentViewOffset() -> CGFloat {
-        viewOffset
-    }
-
-    func stationary() -> CGFloat {
-        viewOffset
-    }
-
     mutating func animateToOffset(
         _ offset: CGFloat,
         motion: MotionSnapshot,
@@ -59,21 +47,12 @@ extension ViewportState {
         viewOffsetToRestore = viewOffset
     }
 
-    mutating func restoreViewOffset(_ offset: CGFloat) {
-        jumpOffset(to: offset)
-        viewOffsetToRestore = nil
-    }
-
     mutating func animateViewOffsetRestore(_ offset: CGFloat, motion: MotionSnapshot, clock: AnimationClock?) {
         if motion.animationsEnabled {
             springOffset(to: offset)
         } else {
             jumpOffset(to: offset)
         }
-        viewOffsetToRestore = nil
-    }
-
-    mutating func clearSavedViewOffset() {
         viewOffsetToRestore = nil
     }
 }

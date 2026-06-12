@@ -66,7 +66,7 @@ extension NiriLayoutEngine {
             viewFrame: viewFrame,
             scale: scale
         )
-        let viewStart = state.targetViewPosPixels(columns: columns, gap: gaps)
+        let viewStart = state.viewPosPixels(columns: columns, gap: gaps)
         let workingStart = areas.origin(of: areas.working)
         let viewportWidth = areas.span(of: areas.working)
 

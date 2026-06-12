@@ -83,7 +83,7 @@ extension ViewportState {
     ) {
         guard !containers.isEmpty, containerIndex >= 0, containerIndex < containers.count else { return }
 
-        let stationaryOffset = stationary()
+        let stationaryOffset = viewOffset
         let activePos = containerPosition(
             at: activeColumnIndex,
             containers: containers,

@@ -26,8 +26,6 @@ struct ViewportState: Equatable {
 
     var activatePrevColumnOnRemoval: CGFloat?
 
-    let springConfig: SpringConfig = .niriHorizontalViewMovement
-
     var displayRefreshRate: Double = 60.0
 }
 
@@ -50,7 +48,7 @@ extension ViewportState {
 
     mutating func springOffset(to offset: CGFloat, config: SpringConfig? = nil) {
         viewOffset = offset
-        offsetTransition.kind = .spring(config ?? springConfig)
+        offsetTransition.kind = .spring(config ?? .niriHorizontalViewMovement)
     }
 
     mutating func clearOffsetTransition() {

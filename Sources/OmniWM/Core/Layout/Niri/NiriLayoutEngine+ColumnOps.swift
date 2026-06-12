@@ -121,7 +121,7 @@ extension NiriLayoutEngine {
 
         if let newColIdx = columnIndex(of: newColumn, in: workspaceId) {
             if newColIdx == state.activeColumnIndex + 1 {
-                state.activatePrevColumnOnRemoval = state.stationary()
+                state.activatePrevColumnOnRemoval = state.viewOffset
             }
             animateColumnsForAddition(
                 columnIndex: newColIdx,
