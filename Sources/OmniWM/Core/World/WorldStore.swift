@@ -156,11 +156,15 @@ final class WorldStore {
             model.setManagedReplacementMetadata(metadata, for: token)
 
         case .activeSpaceChanged,
+             .focusForgotten,
              .focusLeaseChanged,
+             .focusRemembered,
              .managedFocusCancelled,
              .managedFocusConfirmed,
              .managedFocusRequested,
              .nonManagedFocusChanged,
+             .nonManagedFocusTargetChanged,
+             .suppressedFocusChanged,
              .systemSleep,
              .systemWake,
              .topologyChanged:

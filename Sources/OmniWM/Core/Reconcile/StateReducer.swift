@@ -50,11 +50,12 @@ enum StateReducer {
                 newToken: to
             )
 
-        case let .windowRemoved(token, _, _):
+        case let .windowRemoved(token, workspaceId, _):
             plan.lifecyclePhase = .destroyed
             plan.focusSession = removingFocusState(
                 from: currentSnapshot.focusSession,
-                token: token
+                token: token,
+                workspaceId: workspaceId
             )
 
         case let .workspaceAssigned(_, _, workspaceId, monitorId, _):
@@ -70,7 +71,7 @@ enum StateReducer {
                 mode: existingEntry?.mode ?? .tiling
             )
 
-        case let .windowModeChanged(_, workspaceId, monitorId, mode, _):
+        case let .windowModeChanged(token, workspaceId, monitorId, mode, _):
             plan.lifecyclePhase = lifecyclePhase(for: mode)
             plan.observedState = baseObservedState(
                 from: existingEntry,
@@ -83,6 +84,10 @@ enum StateReducer {
                 monitorId: monitorId,
                 mode: mode
             )
+            var focusSession = currentSnapshot.focusSession
+            if focusSession.reconcileRememberedFocus(afterModeChangeOf: token, in: workspaceId, to: mode) {
+                plan.focusSession = focusSession
+            }
 
         case let .floatingGeometryUpdated(_, workspaceId, referenceMonitorId, frame, _, restoreToFloating, _):
             plan.lifecyclePhase = .floating
@@ -188,18 +193,19 @@ enum StateReducer {
             )
 
         case let .managedFocusConfirmed(token, workspaceId, monitorId, appFullscreen, requestId, _):
-            setFocusSession(
-                managedFocusConfirmed(
-                    from: currentSnapshot.focusSession,
-                    token: token,
-                    workspaceId: workspaceId,
-                    monitorId: monitorId,
-                    appFullscreen: appFullscreen,
-                    requestId: requestId
-                ),
-                current: currentSnapshot.focusSession,
-                plan: &plan
+            var focusSession = managedFocusConfirmed(
+                from: currentSnapshot.focusSession,
+                token: token,
+                workspaceId: workspaceId,
+                monitorId: monitorId,
+                appFullscreen: appFullscreen,
+                requestId: requestId
             )
+            if focusSession.suppressedFocusToken == token {
+                focusSession.suppressedFocusToken = nil
+            }
+            focusSession.nonManagedFocusToken = nil
+            setFocusSession(focusSession, current: currentSnapshot.focusSession, plan: &plan)
 
         case let .managedFocusCancelled(token, workspaceId, requestId, _):
             setFocusSession(
@@ -231,6 +237,30 @@ enum StateReducer {
                 current: currentSnapshot.focusSession,
                 plan: &plan
             )
+
+        case let .focusRemembered(token, workspaceId, mode, _):
+            var focusSession = currentSnapshot.focusSession
+            if focusSession.rememberFocus(token, in: workspaceId, mode: mode) {
+                plan.focusSession = focusSession
+            }
+
+        case let .focusForgotten(workspaceIds, _):
+            var focusSession = currentSnapshot.focusSession
+            for workspaceId in workspaceIds {
+                focusSession.lastTiledFocusedByWorkspace.removeValue(forKey: workspaceId)
+                focusSession.lastFloatingFocusedByWorkspace.removeValue(forKey: workspaceId)
+            }
+            setFocusSession(focusSession, current: currentSnapshot.focusSession, plan: &plan)
+
+        case let .nonManagedFocusTargetChanged(target, _):
+            var focusSession = currentSnapshot.focusSession
+            focusSession.nonManagedFocusToken = target
+            setFocusSession(focusSession, current: currentSnapshot.focusSession, plan: &plan)
+
+        case let .suppressedFocusChanged(token, _):
+            var focusSession = currentSnapshot.focusSession
+            focusSession.suppressedFocusToken = token
+            setFocusSession(focusSession, current: currentSnapshot.focusSession, plan: &plan)
 
         case .systemSleep:
             plan.notes = ["system_sleep"]
@@ -443,12 +473,20 @@ enum StateReducer {
         if focusSession.pendingManagedFocus.token == oldToken {
             focusSession.pendingManagedFocus.token = newToken
         }
+        focusSession.replaceRememberedFocus(from: oldToken, to: newToken)
+        if focusSession.nonManagedFocusToken == oldToken {
+            focusSession.nonManagedFocusToken = newToken
+        }
+        if focusSession.suppressedFocusToken == oldToken {
+            focusSession.suppressedFocusToken = newToken
+        }
         return focusSession
     }
 
     private static func removingFocusState(
         from focusSession: FocusSessionSnapshot,
-        token: WindowToken
+        token: WindowToken,
+        workspaceId: WorkspaceDescriptor.ID?
     ) -> FocusSessionSnapshot {
         var focusSession = focusSession
         if focusSession.focusedToken == token {
@@ -458,6 +496,7 @@ enum StateReducer {
         if focusSession.pendingManagedFocus.token == token {
             focusSession.pendingManagedFocus = .empty
         }
+        focusSession.clearRememberedFocus(token, workspaceId: workspaceId)
         return focusSession
     }
 }

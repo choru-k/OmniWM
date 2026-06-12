@@ -111,12 +111,16 @@ enum EventNormalizer {
 
         case .activeSpaceChanged,
              .floatingStateChanged,
+             .focusForgotten,
+             .focusRemembered,
              .managedFocusCancelled,
              .managedFocusConfirmed,
              .managedFocusRequested,
              .manualLayoutOverrideChanged,
              .niriPlacementsResolved,
              .nonManagedFocusChanged,
+             .nonManagedFocusTargetChanged,
+             .suppressedFocusChanged,
              .systemSleep,
              .systemWake:
             return event

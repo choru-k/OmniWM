@@ -105,7 +105,9 @@ struct RestorePlanner {
             plan.notes.append("restore_refresh=system_sleep")
         case .floatingGeometryUpdated,
              .floatingStateChanged,
+             .focusForgotten,
              .focusLeaseChanged,
+             .focusRemembered,
              .hiddenStateChanged,
              .managedFocusCancelled,
              .managedFocusConfirmed,
@@ -115,6 +117,8 @@ struct RestorePlanner {
              .nativeFullscreenTransition,
              .niriPlacementsResolved,
              .nonManagedFocusChanged,
+             .nonManagedFocusTargetChanged,
+             .suppressedFocusChanged,
              .windowAdmitted,
              .windowModeChanged,
              .windowRekeyed,

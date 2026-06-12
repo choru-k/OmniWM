@@ -142,6 +142,24 @@ enum WMEvent: Equatable {
         preservePendingManagedFocus: Bool,
         source: WMEventSource
     )
+    case focusRemembered(
+        token: WindowToken,
+        workspaceId: WorkspaceDescriptor.ID,
+        mode: TrackedWindowMode,
+        source: WMEventSource
+    )
+    case focusForgotten(
+        workspaceIds: Set<WorkspaceDescriptor.ID>,
+        source: WMEventSource
+    )
+    case nonManagedFocusTargetChanged(
+        target: WindowToken?,
+        source: WMEventSource
+    )
+    case suppressedFocusChanged(
+        token: WindowToken?,
+        source: WMEventSource
+    )
     case systemSleep(source: WMEventSource)
     case systemWake(source: WMEventSource)
 
@@ -165,9 +183,13 @@ enum WMEvent: Equatable {
         case let .managedFocusCancelled(token, _, _, _):
             token
         case .activeSpaceChanged,
+             .focusForgotten,
              .focusLeaseChanged,
+             .focusRemembered,
              .niriPlacementsResolved,
              .nonManagedFocusChanged,
+             .nonManagedFocusTargetChanged,
+             .suppressedFocusChanged,
              .systemSleep,
              .systemWake,
              .topologyChanged:
@@ -196,6 +218,10 @@ enum WMEvent: Equatable {
              let .managedFocusConfirmed(_, _, _, _, _, source),
              let .managedFocusCancelled(_, _, _, source),
              let .nonManagedFocusChanged(_, _, _, _, source),
+             let .focusRemembered(_, _, _, source),
+             let .focusForgotten(_, source),
+             let .nonManagedFocusTargetChanged(_, source),
+             let .suppressedFocusChanged(_, source),
              let .systemSleep(source),
              let .systemWake(source):
             source
@@ -242,6 +268,14 @@ enum WMEvent: Equatable {
             "managed_focus_cancelled token=\(token.map(String.init(describing:)) ?? "nil") workspace=\(workspaceId?.uuidString ?? "nil") request=\(requestId.map { String($0) } ?? "nil")"
         case let .nonManagedFocusChanged(active, appFullscreen, preserveFocusedToken, preservePendingManagedFocus, _):
             "non_managed_focus_changed active=\(active) fullscreen=\(appFullscreen) preserve=\(preserveFocusedToken) preserve_pending=\(preservePendingManagedFocus)"
+        case let .focusRemembered(token, workspaceId, mode, _):
+            "focus_remembered token=\(token) workspace=\(workspaceId.uuidString) mode=\(mode)"
+        case let .focusForgotten(workspaceIds, _):
+            "focus_forgotten workspaces=\(workspaceIds.count)"
+        case let .nonManagedFocusTargetChanged(target, _):
+            "non_managed_focus_target_changed target=\(target.map(String.init(describing:)) ?? "nil")"
+        case let .suppressedFocusChanged(token, _):
+            "suppressed_focus_changed token=\(token.map(String.init(describing:)) ?? "nil")"
         case .systemSleep:
             "system_sleep"
         case .systemWake:
