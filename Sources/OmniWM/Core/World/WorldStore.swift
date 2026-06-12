@@ -11,6 +11,8 @@ final class WorldStore {
     private(set) var viewports: [WorkspaceDescriptor.ID: ViewportState] = [:]
     private(set) var scratchpadToken: WindowToken?
     private(set) var monitorSessions: [Monitor.ID: MonitorSession] = [:]
+    private(set) var niriEngine: NiriLayoutEngine?
+    private(set) var dwindleEngine: DwindleLayoutEngine?
     private var commitDepth = 0
 
     init(nowProvider: @escaping () -> Date = Date.init) {
@@ -352,6 +354,14 @@ extension WorldStore {
     func updateFocus<T>(_ mutate: (inout FocusSessionSnapshot) -> T) -> T {
         assertInCommit("updateFocus")
         return mutate(&focus)
+    }
+
+    func installNiriEngine(_ engine: NiriLayoutEngine?) {
+        niriEngine = engine
+    }
+
+    func installDwindleEngine(_ engine: DwindleLayoutEngine?) {
+        dwindleEngine = engine
     }
 
     func applyViewportPlan(_ viewportPlan: ViewportPlan) {

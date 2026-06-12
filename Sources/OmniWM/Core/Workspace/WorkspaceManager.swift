@@ -3015,6 +3015,16 @@ final class WorkspaceManager {
         updateWorkspace(workspaceId) { $0.assignedMonitorPoint = monitor.workspaceAnchorPoint }
     }
 
+    var niriEngine: NiriLayoutEngine? {
+        get { world.niriEngine }
+        set { world.installNiriEngine(newValue) }
+    }
+
+    var dwindleEngine: DwindleLayoutEngine? {
+        get { world.dwindleEngine }
+        set { world.installDwindleEngine(newValue) }
+    }
+
     func niriViewportState(for workspaceId: WorkspaceDescriptor.ID) -> ViewportState {
         world.viewports[workspaceId] ?? ViewportState()
     }

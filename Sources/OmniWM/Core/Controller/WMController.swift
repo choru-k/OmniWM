@@ -88,8 +88,15 @@ final class WMController {
     private let restorePlanner = RestorePlanner()
     let windowRuleEngine = WindowRuleEngine()
 
-    var niriEngine: NiriLayoutEngine?
-    var dwindleEngine: DwindleLayoutEngine?
+    var niriEngine: NiriLayoutEngine? {
+        get { workspaceManager.niriEngine }
+        set { workspaceManager.niriEngine = newValue }
+    }
+
+    var dwindleEngine: DwindleLayoutEngine? {
+        get { workspaceManager.dwindleEngine }
+        set { workspaceManager.dwindleEngine = newValue }
+    }
 
     let tabbedOverlayManager = TabbedColumnOverlayManager()
     @ObservationIgnored
