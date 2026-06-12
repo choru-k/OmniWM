@@ -1044,7 +1044,9 @@ final class DwindleLayoutEngine {
                     newRatio -= delta
                 }
 
-                parent.kind = .split(orientation: orientation, ratio: settings.clampedRatio(newRatio))
+                let clampedRatio = settings.clampedRatio(newRatio)
+                guard clampedRatio != ratio else { return false }
+                parent.kind = .split(orientation: orientation, ratio: clampedRatio)
                 return true
             }
 
@@ -1055,17 +1057,20 @@ final class DwindleLayoutEngine {
 
     @discardableResult
     func balanceSizes(in workspaceId: WorkspaceDescriptor.ID) -> Bool {
-        guard let root = roots[workspaceId], case .split = root.kind else { return false }
-        balanceSizesRecursive(root)
-        return true
+        guard let root = roots[workspaceId] else { return false }
+        return balanceSizesRecursive(root)
     }
 
-    private func balanceSizesRecursive(_ node: DwindleNode) {
-        guard case let .split(orientation, _) = node.kind else { return }
-        node.kind = .split(orientation: orientation, ratio: 1.0)
-        for child in node.children {
-            balanceSizesRecursive(child)
+    private func balanceSizesRecursive(_ node: DwindleNode) -> Bool {
+        guard case let .split(orientation, ratio) = node.kind else { return false }
+        var changed = ratio != 1.0
+        if changed {
+            node.kind = .split(orientation: orientation, ratio: 1.0)
         }
+        for child in node.children {
+            changed = balanceSizesRecursive(child) || changed
+        }
+        return changed
     }
 
     @discardableResult

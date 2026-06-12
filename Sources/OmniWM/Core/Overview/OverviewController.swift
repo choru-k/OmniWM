@@ -1043,7 +1043,8 @@ private extension OverviewController {
                 handle: session.handle,
                 targetHandle: targetHandle,
                 position: niriPosition,
-                in: targetWsId
+                in: targetWsId,
+                source: .mouse
             )
             wmController.layoutRefreshController.startScrollAnimation(for: targetWsId)
 
@@ -1058,7 +1059,8 @@ private extension OverviewController {
             wmController.niriLayoutHandler.insertWindowInNewColumn(
                 handle: session.handle,
                 insertIndex: insertIndex,
-                in: targetWsId
+                in: targetWsId,
+                source: .mouse
             )
             wmController.layoutRefreshController.startScrollAnimation(for: targetWsId)
         }

@@ -213,9 +213,7 @@ enum NiriWindowMoveResult {
         in workspaceId: WorkspaceDescriptor.ID,
         source: WMEventSource = .command
     ) {
-        controller?.workspaceManager.recordReconcileEvent(
-            .layoutOperationPerformed(workspaceId: workspaceId, operation: operation, source: source)
-        )
+        controller?.workspaceManager.recordLayoutOperation(operation, in: workspaceId, source: source)
     }
 
     func requestSelectedWindowFocusAfterLayout(in workspaceId: WorkspaceDescriptor.ID) {
@@ -1883,14 +1881,15 @@ enum NiriWindowMoveResult {
         handle: WindowHandle,
         targetHandle: WindowHandle,
         position: InsertPosition,
-        in workspaceId: WorkspaceDescriptor.ID
+        in workspaceId: WorkspaceDescriptor.ID,
+        source: WMEventSource = .command
     ) -> Bool {
         var didMove = false
         withNiriWorkspaceContext(for: workspaceId) { engine, wsId, motion, state, monitor, workingFrame, gaps in
-            guard let source = engine.findNode(for: handle) else { return }
+            guard let sourceNode = engine.findNode(for: handle) else { return }
             guard let target = engine.findNode(for: targetHandle) else { return }
             didMove = engine.insertWindowByMove(
-                sourceWindowId: source.id,
+                sourceWindowId: sourceNode.id,
                 targetWindowId: target.id,
                 position: position,
                 in: wsId,
@@ -1900,6 +1899,9 @@ enum NiriWindowMoveResult {
                 gaps: gaps
             )
         }
+        if didMove {
+            recordLayoutOperation(.windowInserted(token: handle.id), in: workspaceId, source: source)
+        }
         return didMove
     }
 
@@ -1907,7 +1909,8 @@ enum NiriWindowMoveResult {
     func insertWindowInNewColumn(
         handle: WindowHandle,
         insertIndex: Int,
-        in workspaceId: WorkspaceDescriptor.ID
+        in workspaceId: WorkspaceDescriptor.ID,
+        source: WMEventSource = .command
     ) -> Bool {
         var didMove = false
         withNiriWorkspaceContext(for: workspaceId) { engine, wsId, motion, state, monitor, workingFrame, gaps in
@@ -1921,6 +1924,9 @@ enum NiriWindowMoveResult {
                 workingFrame: workingFrame,
                 gaps: gaps
             )
+        }
+        if didMove {
+            recordLayoutOperation(.windowInserted(token: handle.id), in: workspaceId, source: source)
         }
         return didMove
     }
@@ -1958,9 +1964,7 @@ struct NodeActivationOptions {
     }
 
     func record(_ operation: LayoutOperation) {
-        controller.workspaceManager.recordReconcileEvent(
-            .layoutOperationPerformed(workspaceId: wsId, operation: operation, source: .command)
-        )
+        controller.workspaceManager.recordLayoutOperation(operation, in: wsId)
     }
 
     func commitWithPredictedAnimation(

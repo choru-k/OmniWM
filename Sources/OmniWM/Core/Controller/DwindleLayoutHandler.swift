@@ -153,9 +153,7 @@ import QuartzCore
         _ operation: LayoutOperation,
         in workspaceId: WorkspaceDescriptor.ID
     ) {
-        controller?.workspaceManager.recordReconcileEvent(
-            .layoutOperationPerformed(workspaceId: workspaceId, operation: operation, source: .command)
-        )
+        controller?.workspaceManager.recordLayoutOperation(operation, in: workspaceId)
     }
 
     // MARK: - Layout Capability Commands

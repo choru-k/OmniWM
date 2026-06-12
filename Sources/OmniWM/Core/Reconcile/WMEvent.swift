@@ -34,6 +34,7 @@ enum LayoutOperation: Equatable {
     case splitSwapped
     case tabActivated(token: WindowToken)
     case windowConsumedOrExpelled(token: WindowToken)
+    case windowInserted(token: WindowToken)
     case windowMovedInColumn(token: WindowToken)
     case windowMovedToRoot
     case windowMovedToWorkspace(token: WindowToken, to: WorkspaceDescriptor.ID)
@@ -70,6 +71,8 @@ enum LayoutOperation: Equatable {
             "tab_activated token=\(token)"
         case let .windowConsumedOrExpelled(token):
             "window_consumed_or_expelled token=\(token)"
+        case let .windowInserted(token):
+            "window_inserted token=\(token)"
         case let .windowMovedInColumn(token):
             "window_moved_in_column token=\(token)"
         case .windowMovedToRoot:

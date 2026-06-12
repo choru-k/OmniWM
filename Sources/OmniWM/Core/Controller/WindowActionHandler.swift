@@ -533,6 +533,7 @@ final class WindowActionHandler {
             guard engine.summonWindowRight(token, beside: focusedToken, in: targetWorkspaceId) else {
                 return false
             }
+            controller.workspaceManager.recordLayoutOperation(.windowInserted(token: token), in: targetWorkspaceId)
             commitSummonedWindowFocus(token: token, workspaceId: targetWorkspaceId)
             return true
         }

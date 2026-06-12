@@ -325,6 +325,16 @@ final class WorkspaceManager {
         return txn
     }
 
+    func recordLayoutOperation(
+        _ operation: LayoutOperation,
+        in workspaceId: WorkspaceDescriptor.ID,
+        source: WMEventSource = .command
+    ) {
+        recordReconcileEvent(
+            .layoutOperationPerformed(workspaceId: workspaceId, operation: operation, source: source)
+        )
+    }
+
     private func viewportWorkspaceId(for event: WMEvent) -> WorkspaceDescriptor.ID? {
         switch event {
         case let .selectionChanged(workspaceId, _, _),

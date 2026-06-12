@@ -722,12 +722,10 @@ final class MouseEventHandler {
                 }
                 if didEnd {
                     if let movedToken {
-                        controller.workspaceManager.recordReconcileEvent(
-                            .layoutOperationPerformed(
-                                workspaceId: wsId,
-                                operation: .interactiveMoveEnded(token: movedToken),
-                                source: .mouse
-                            )
+                        controller.workspaceManager.recordLayoutOperation(
+                            .interactiveMoveEnded(token: movedToken),
+                            in: wsId,
+                            source: .mouse
                         )
                     }
                     controller.layoutRefreshController.requestImmediateRelayout(reason: .interactiveGesture)
@@ -765,12 +763,10 @@ final class MouseEventHandler {
             }
             if hadInteractiveResize {
                 if let resizedToken {
-                    controller.workspaceManager.recordReconcileEvent(
-                        .layoutOperationPerformed(
-                            workspaceId: wsId,
-                            operation: .interactiveResizeEnded(token: resizedToken),
-                            source: .mouse
-                        )
+                    controller.workspaceManager.recordLayoutOperation(
+                        .interactiveResizeEnded(token: resizedToken),
+                        in: wsId,
+                        source: .mouse
                     )
                 }
                 controller.layoutRefreshController.requestImmediateRelayout(reason: .interactiveGesture)

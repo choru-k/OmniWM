@@ -66,9 +66,7 @@ final class WorkspaceNavigationHandler {
         _ operation: LayoutOperation,
         in workspaceId: WorkspaceDescriptor.ID
     ) {
-        controller?.workspaceManager.recordReconcileEvent(
-            .layoutOperationPerformed(workspaceId: workspaceId, operation: operation, source: .command)
-        )
+        controller?.workspaceManager.recordLayoutOperation(operation, in: workspaceId)
     }
 
     private func commitWorkspaceSelection(
@@ -481,7 +479,6 @@ final class WorkspaceNavigationHandler {
                     targetState: targetState,
                     targetFocusedToken: nil
                 )
-                recordLayoutOperation(.windowMovedToWorkspace(token: token, to: targetWsId), in: sourceWsId)
                 movedWithNiri = true
             }
         }
@@ -541,6 +538,10 @@ final class WorkspaceNavigationHandler {
             succeeded = false
         } else {
             succeeded = true
+        }
+
+        if succeeded, let sourceWsId {
+            recordLayoutOperation(.windowMovedToWorkspace(token: token, to: targetWsId), in: sourceWsId)
         }
 
         return WindowTransferResult(succeeded: succeeded, newSourceFocusToken: newSourceFocusToken)
