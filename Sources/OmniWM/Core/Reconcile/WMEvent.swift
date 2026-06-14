@@ -275,6 +275,10 @@ enum WMEvent: Equatable {
         sessions: [Monitor.ID: MonitorSession],
         source: WMEventSource
     )
+    case spaceTopologyChanged(
+        topology: SpaceTopology,
+        source: WMEventSource
+    )
     case systemSleep(source: WMEventSource)
     case systemWake(source: WMEventSource)
     case userCommand(
@@ -313,6 +317,7 @@ enum WMEvent: Equatable {
              .nonManagedFocusTargetChanged,
              .scratchpadChanged,
              .selectionChanged,
+             .spaceTopologyChanged,
              .suppressedFocusChanged,
              .systemSleep,
              .systemWake,
@@ -362,6 +367,7 @@ enum WMEvent: Equatable {
              let .selectionChanged(_, _, source),
              let .scratchpadChanged(_, source),
              let .visibleWorkspacesChanged(_, source),
+             let .spaceTopologyChanged(_, source),
              let .systemSleep(source),
              let .systemWake(source),
              let .userCommand(_, source):
@@ -437,6 +443,8 @@ enum WMEvent: Equatable {
             "scratchpad_changed token=\(token.map(String.init(describing:)) ?? "nil")"
         case let .visibleWorkspacesChanged(sessions, _):
             "visible_workspaces_changed monitors=\(sessions.count)"
+        case let .spaceTopologyChanged(topology, _):
+            "space_topology_changed displays=\(topology.displays.count) windows=\(topology.windowSpace.count)"
         case .systemSleep:
             "system_sleep"
         case .systemWake:

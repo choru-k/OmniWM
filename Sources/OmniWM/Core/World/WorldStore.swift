@@ -54,6 +54,7 @@ final class WorldStore {
     private(set) var viewports: [WorkspaceDescriptor.ID: ViewportState] = [:]
     private(set) var scratchpadToken: WindowToken?
     private(set) var monitorSessions: [Monitor.ID: MonitorSession] = [:]
+    private(set) var spaceTopology = SpaceTopology()
     private(set) var niriEngine: NiriLayoutEngine?
     private(set) var dwindleEngine: DwindleLayoutEngine?
     private(set) var epochMarks = InvalidationMarks()
@@ -279,6 +280,10 @@ final class WorldStore {
         case let .visibleWorkspacesChanged(sessions, _):
             guard phase == .beforePlan else { return }
             monitorSessions = sessions
+
+        case let .spaceTopologyChanged(topology, _):
+            guard phase == .beforePlan else { return }
+            spaceTopology = topology
 
         case .activeSpaceChanged,
              .focusForgotten,

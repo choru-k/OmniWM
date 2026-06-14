@@ -127,6 +127,9 @@ enum StateReducer {
         case let .visibleWorkspacesChanged(sessions, _):
             plan.notes = ["visible_workspaces=\(sessions.count)"]
 
+        case let .spaceTopologyChanged(topology, _):
+            plan.notes = ["space_topology displays=\(topology.displays.count)"]
+
         case let .hiddenStateChanged(_, workspaceId, monitorId, hiddenState, _):
             var observedState = baseObservedState(
                 from: existingEntry,

@@ -123,6 +123,7 @@ struct RestorePlanner {
              .nonManagedFocusTargetChanged,
              .scratchpadChanged,
              .selectionChanged,
+             .spaceTopologyChanged,
              .suppressedFocusChanged,
              .userCommand,
              .viewportChanged,

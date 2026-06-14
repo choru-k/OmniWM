@@ -37,6 +37,10 @@ struct WorldView {
         controller.workspaceManager.isAppFullscreenActive
     }
 
+    var spaceTopology: SpaceTopology {
+        controller.workspaceManager.spaceTopology
+    }
+
     var borderConfig: BorderConfig {
         BorderConfig.from(settings: controller.settings)
     }

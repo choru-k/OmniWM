@@ -125,6 +125,7 @@ enum EventNormalizer {
              .nonManagedFocusTargetChanged,
              .scratchpadChanged,
              .selectionChanged,
+             .spaceTopologyChanged,
              .suppressedFocusChanged,
              .systemSleep,
              .systemWake,

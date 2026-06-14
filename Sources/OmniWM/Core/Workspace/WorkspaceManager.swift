@@ -507,6 +507,7 @@ final class WorkspaceManager {
              .nonManagedFocusTargetChanged,
              .scratchpadChanged,
              .selectionChanged,
+             .spaceTopologyChanged,
              .suppressedFocusChanged,
              .userCommand,
              .viewportChanged,
@@ -3756,6 +3757,15 @@ final class WorkspaceManager {
         invalidateWorkspaceProjectionCaches()
     }
 
+    var spaceTopology: SpaceTopology {
+        world.spaceTopology
+    }
+
+    func commitSpaceTopology(_ topology: SpaceTopology) {
+        guard topology != world.spaceTopology else { return }
+        recordReconcileEvent(.spaceTopologyChanged(topology: topology, source: .service))
+    }
+
     @discardableResult
     private func updateInteractionMonitor(
         _ monitorId: Monitor.ID?,
@@ -3878,6 +3888,7 @@ final class WorkspaceManager {
              .nonManagedFocusTargetChanged,
              .scratchpadChanged,
              .selectionChanged,
+             .spaceTopologyChanged,
              .suppressedFocusChanged,
              .userCommand,
              .viewportChanged,
