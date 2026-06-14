@@ -409,12 +409,15 @@ final class AXEventHandler {
 
         switch event {
         case let .created(windowId, spaceId):
+            controller.spaceTracker.noteWindowSpace(windowId: Int(windowId), spaceId: spaceId)
             handleCGSWindowCreated(windowId: windowId, spaceId: spaceId)
 
         case let .destroyed(windowId, _):
+            controller.spaceTracker.noteWindowDestroyed(windowId: Int(windowId))
             handleCGSWindowDestroyed(windowId: windowId)
 
         case let .closed(windowId):
+            controller.spaceTracker.noteWindowDestroyed(windowId: Int(windowId))
             handleCGSWindowDestroyed(windowId: windowId)
 
         case let .frameChanged(windowId):

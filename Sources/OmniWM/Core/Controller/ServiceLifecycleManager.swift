@@ -87,6 +87,7 @@ final class ServiceLifecycleManager {
             self?.handleGapsChanged()
         }
 
+        controller.spaceTracker.start()
         performStartupRefresh()
         startSecureInputMonitor()
         startLockScreenObserver()
@@ -223,6 +224,7 @@ final class ServiceLifecycleManager {
 
     func handleActiveSpaceDidChange() {
         guard let controller else { return }
+        controller.spaceTracker.refresh()
         controller.workspaceManager.recordReconcileEvent(.activeSpaceChanged(source: .service))
         controller.layoutRefreshController.requestFullRescan(reason: .activeSpaceChanged)
     }

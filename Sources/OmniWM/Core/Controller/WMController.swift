@@ -154,6 +154,8 @@ final class WMController {
     @ObservationIgnored
     private(set) lazy var axEventHandler = AXEventHandler(controller: self)
     @ObservationIgnored
+    private(set) lazy var spaceTracker = SpaceTracker(controller: self)
+    @ObservationIgnored
     private(set) lazy var commandHandler = CommandHandler(controller: self)
     @ObservationIgnored
     private(set) lazy var workspaceNavigationHandler = WorkspaceNavigationHandler(controller: self)
