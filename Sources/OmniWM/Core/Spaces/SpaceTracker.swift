@@ -37,6 +37,7 @@ final class SpaceTracker {
             topology.windowSpace[windowId] = spaceId
         }
         controller.workspaceManager.commitSpaceTopology(topology)
+        controller.workspaceManager.reconcileNativeFullscreenWithTopology()
     }
 
     func noteWindowSpace(windowId: Int, spaceId: UInt64) {

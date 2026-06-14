@@ -1571,6 +1571,22 @@ final class WorkspaceManager {
         return restored
     }
 
+    func reconcileNativeFullscreenWithTopology() {
+        let topology = world.spaceTopology
+        guard topology.isPopulated else { return }
+        for entry in world.allEntries() where entry.mode == .tiling {
+            let windowId = entry.windowId
+            guard windowId > 0, let spaceId = topology.spaceForWindow(windowId) else { continue }
+            let onFullscreenSpace = topology.isFullscreenSpace(spaceId)
+            let isSuspended = entry.layoutReason == .nativeFullscreen
+            if onFullscreenSpace, !isSuspended, topology.isCurrentSpace(spaceId) {
+                markNativeFullscreenSuspended(entry.token)
+            } else if !onFullscreenSpace, isSuspended {
+                restoreNativeFullscreenRecord(for: entry.token)
+            }
+        }
+    }
+
     func nativeFullscreenCommandTarget(frontmostToken: WindowToken?) -> WindowToken? {
         if let frontmostToken,
            let record = nativeFullscreenRecord(for: frontmostToken),
