@@ -2424,6 +2424,79 @@ final class RuntimeArchitectureTests: XCTestCase {
     }
 
     @MainActor
+    func testBatchedLayoutBuildCommitsNiriViewportAndStampsPostBuildSeq() throws {
+        let controller = Self.controller()
+        let workspaceId = try XCTUnwrap(controller.workspaceManager.workspaceId(for: "1", createIfMissing: true))
+        _ = controller.workspaceManager.focusWorkspace(named: "1")
+        controller.niriLayoutHandler.enableNiriLayout()
+        controller.layoutRefreshController.layoutState.hasCompletedInitialRefresh = true
+        _ = Self.addNiriRuntimeWindows(
+            count: 2,
+            pidBase: 766_000,
+            windowBase: 766_100,
+            to: workspaceId,
+            controller: controller
+        )
+
+        let selectionBeforeBatch = controller.workspaceManager.niriViewportState(for: workspaceId).selectedNodeId
+
+        let plans = controller.workspaceManager.withBatchedLayoutBuild {
+            controller.niriLayoutHandler.layoutWithNiriEngine(activeWorkspaces: [workspaceId])
+        }
+
+        XCTAssertNil(selectionBeforeBatch)
+        XCTAssertNotNil(controller.workspaceManager.niriViewportState(for: workspaceId).selectedNodeId)
+
+        let committedSeq = controller.workspaceManager.worldSeq
+        XCTAssertFalse(plans.isEmpty)
+        for plan in plans {
+            XCTAssertNil(plan.sessionPatch.viewportState)
+            XCTAssertEqual(plan.plannedSeq, committedSeq)
+            XCTAssertEqual(plan.sessionPatch.plannedSeq, plan.plannedSeq)
+        }
+    }
+
+    @MainActor
+    func testBatchedLayoutBuildLeavesDwindlePlansWithoutViewportAndStampsPostBuildSeq() throws {
+        let settings = Self.settingsStore()
+        settings.workspaceConfigurations = settings.workspaceConfigurations.map {
+            $0.name == "1" ? $0.with(layoutType: .dwindle) : $0
+        }
+        let controller = WMController(
+            settings: settings,
+            windowFocusOperations: WindowFocusOperations(
+                activateApp: { _ in },
+                focusSpecificWindow: { _, _, _ in },
+                raiseWindow: { _ in }
+            )
+        )
+        let workspaceId = try XCTUnwrap(controller.workspaceManager.workspaceId(for: "1", createIfMissing: true))
+        _ = controller.workspaceManager.focusWorkspace(named: "1")
+        let engine = DwindleLayoutEngine()
+        engine.animationClock = controller.animationClock
+        controller.dwindleEngine = engine
+        let token = controller.workspaceManager.addWindow(
+            AXWindowRef(element: AXUIElementCreateApplication(766_010), windowId: 766_110),
+            pid: 766_010,
+            windowId: 766_110,
+            to: workspaceId
+        )
+        _ = engine.addWindow(token: token, to: workspaceId, activeWindowFrame: nil)
+
+        let plans = controller.workspaceManager.withBatchedLayoutBuild {
+            controller.dwindleLayoutHandler.layoutWithDwindleEngine(activeWorkspaces: [workspaceId])
+        }
+
+        let committedSeq = controller.workspaceManager.worldSeq
+        XCTAssertFalse(plans.isEmpty)
+        for plan in plans {
+            XCTAssertNil(plan.sessionPatch.viewportState)
+            XCTAssertEqual(plan.plannedSeq, committedSeq)
+            XCTAssertEqual(plan.sessionPatch.plannedSeq, plan.plannedSeq)
+        }
+    }
+
+    @MainActor
     func testNiriFocusedRemovalPreferredRecoveryUsesLayoutRememberedToken() async throws {
         var focusedTokens: [WindowToken] = []
         let controller = Self.controller(
