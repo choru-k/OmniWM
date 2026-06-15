@@ -1754,6 +1754,7 @@ final class AXEventHandler {
         )
 
         guard let axRef, let focusedWindow = facts.focusedWindow else {
+            controller.workspaceManager.setSystemModalFocus(nil)
             handleMissingFocusedWindow(
                 pid: pid,
                 source: source,
@@ -1763,6 +1764,7 @@ final class AXEventHandler {
             return
         }
         let token = WindowToken(pid: pid, windowId: axRef.windowId)
+        controller.workspaceManager.setSystemModalFocus(focusedWindow.isSystemModalSurface ? token : nil)
 
         let appFullscreen = focusedWindow.isFullscreen
 

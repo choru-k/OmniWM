@@ -192,7 +192,8 @@ final class EventIntakeReplayTests: XCTestCase {
                 requestedAtSeq: 0,
                 focusedWindow: FocusedWindowFact(
                     axRef: AXWindowRef(element: AXUIElementCreateApplication(pid), windowId: 42),
-                    isFullscreen: false
+                    isFullscreen: false,
+                    isSystemModalSurface: false
                 )
             )
         )
@@ -247,6 +248,59 @@ final class EventIntakeReplayTests: XCTestCase {
     }
 
     @MainActor
+    func testSystemModalFocusSuppressesBorderAndClearsOnNormalFocus() throws {
+        let pid: pid_t = 100
+        let scenario = try makeScenario(pid: pid)
+        defer { scenario.tearDown() }
+        let controller = scenario.controller
+        let system = scenario.system
+
+        var reportSystemModal = true
+        controller.factResolver.factProvider = { pid in
+            guard let windowId = system.focusedWindowIdByPid[pid] else { return nil }
+            return FocusedWindowFact(
+                axRef: AXWindowRef(element: AXUIElementCreateApplication(pid), windowId: windowId),
+                isFullscreen: false,
+                isSystemModalSurface: reportSystemModal
+            )
+        }
+
+        system.focusedWindowIdByPid[pid] = scenario.tokenB.windowId
+        controller.eventIntake.enqueue(.axFocusedWindowChanged(pid: pid))
+        scenario.drainToQuiescence()
+
+        XCTAssertEqual(controller.workspaceManager.systemModalFocusToken, scenario.tokenB)
+        XCTAssertEqual(WorldView(controller: controller).systemModalFocusToken, scenario.tokenB)
+        XCTAssertNil(SurfaceDerivation.deriveBorder(world: WorldView(controller: controller)))
+
+        reportSystemModal = false
+        system.focusedWindowIdByPid[pid] = scenario.tokenA.windowId
+        controller.eventIntake.enqueue(.axFocusedWindowChanged(pid: pid))
+        scenario.drainToQuiescence()
+
+        XCTAssertNil(controller.workspaceManager.systemModalFocusToken)
+    }
+
+    @MainActor
+    func testStaleSystemModalFocusTokenDoesNotSuppressDifferentRenderableToken() throws {
+        let pid: pid_t = 100
+        let scenario = try makeScenario(pid: pid)
+        defer { scenario.tearDown() }
+        let controller = scenario.controller
+        let system = scenario.system
+
+        system.focusedWindowIdByPid[pid] = scenario.tokenB.windowId
+        controller.eventIntake.enqueue(.axFocusedWindowChanged(pid: pid))
+        scenario.drainToQuiescence()
+
+        controller.workspaceManager.setSystemModalFocus(scenario.tokenA)
+
+        XCTAssertEqual(controller.workspaceManager.renderableFocusToken, scenario.tokenB)
+        XCTAssertEqual(WorldView(controller: controller).systemModalFocusToken, scenario.tokenA)
+        XCTAssertNotNil(SurfaceDerivation.deriveBorder(world: WorldView(controller: controller)))
+    }
+
+    @MainActor
     private func makeScenario(pid: pid_t) throws -> ReplayScenario {
         let system = FakeWindowSystem()
         let controller = WMController(
@@ -276,7 +330,8 @@ final class EventIntakeReplayTests: XCTestCase {
             guard let windowId else { return nil }
             return FocusedWindowFact(
                 axRef: AXWindowRef(element: AXUIElementCreateApplication(pid), windowId: windowId),
-                isFullscreen: false
+                isFullscreen: false,
+                isSystemModalSurface: false
             )
         }
         controller.hasStartedServices = true

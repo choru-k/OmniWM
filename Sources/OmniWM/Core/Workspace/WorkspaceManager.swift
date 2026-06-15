@@ -374,6 +374,7 @@ final class WorkspaceManager {
             || current.lastFloatingFocusedByWorkspace != previous.lastFloatingFocusedByWorkspace
             || current.nonManagedFocusToken != previous.nonManagedFocusToken
             || current.suppressedFocusToken != previous.suppressedFocusToken
+            || current.systemModalFocusToken != previous.systemModalFocusToken
     }
 
     private func noteAuxiliaryFocusInvalidationIfNeeded(
@@ -390,7 +391,8 @@ final class WorkspaceManager {
             let workspaceId = focusInvalidationWorkspaceId(for: world.focus)
             noteFocusInvalidation(previousWorkspaceId: workspaceId, currentWorkspaceId: workspaceId)
         case .nonManagedFocusTargetChanged,
-             .suppressedFocusChanged:
+             .suppressedFocusChanged,
+             .systemModalFocusChanged:
             guard plan.focusSession != nil else { return }
             let workspaceId = focusInvalidationWorkspaceId(for: world.focus)
             noteFocusInvalidation(previousWorkspaceId: workspaceId, currentWorkspaceId: workspaceId)
@@ -501,6 +503,7 @@ final class WorkspaceManager {
              .selectionChanged,
              .spaceTopologyChanged,
              .suppressedFocusChanged,
+             .systemModalFocusChanged,
              .userCommand,
              .viewportChanged,
              .viewportCommitted,
@@ -1691,6 +1694,10 @@ final class WorkspaceManager {
         world.focus.suppressedFocusToken
     }
 
+    var systemModalFocusToken: WindowToken? {
+        world.focus.systemModalFocusToken
+    }
+
     var renderableFocusToken: WindowToken? {
         if world.focus.isNonManagedFocusActive {
             return world.focus.nonManagedFocusToken
@@ -1710,6 +1717,15 @@ final class WorkspaceManager {
     func suppressFocusBorder(for token: WindowToken) {
         guard world.focus.suppressedFocusToken != token else { return }
         if applyFocusReconcileEvent(.suppressedFocusChanged(token: token, source: .workspaceManager)) {
+            notifySessionStateChanged()
+        }
+    }
+
+    func setSystemModalFocus(_ token: WindowToken?) {
+        guard world.focus.systemModalFocusToken != token else { return }
+        if applyFocusReconcileEvent(
+            .systemModalFocusChanged(token: token, source: .workspaceManager)
+        ) {
             notifySessionStateChanged()
         }
     }
@@ -3782,6 +3798,7 @@ final class WorkspaceManager {
              .selectionChanged,
              .spaceTopologyChanged,
              .suppressedFocusChanged,
+             .systemModalFocusChanged,
              .userCommand,
              .viewportChanged,
              .viewportCommitted,

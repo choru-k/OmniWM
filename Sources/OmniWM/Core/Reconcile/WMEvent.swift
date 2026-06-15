@@ -227,6 +227,10 @@ enum WMEvent: Equatable {
         token: WindowToken?,
         source: WMEventSource
     )
+    case systemModalFocusChanged(
+        token: WindowToken?,
+        source: WMEventSource
+    )
     case workspaceFocusCleared(
         workspaceId: WorkspaceDescriptor.ID,
         source: WMEventSource
@@ -317,6 +321,7 @@ enum WMEvent: Equatable {
              .selectionChanged,
              .spaceTopologyChanged,
              .suppressedFocusChanged,
+             .systemModalFocusChanged,
              .systemSleep,
              .systemWake,
              .topologyChanged,
@@ -355,6 +360,7 @@ enum WMEvent: Equatable {
              let .focusForgotten(_, source),
              let .nonManagedFocusTargetChanged(_, source),
              let .suppressedFocusChanged(_, source),
+             let .systemModalFocusChanged(_, source),
              let .workspaceFocusCleared(_, source),
              let .nativeFullscreenPlaceholderSelected(_, _, source),
              let .interactionMonitorChanged(_, _, source),
@@ -421,6 +427,8 @@ enum WMEvent: Equatable {
             "non_managed_focus_target_changed target=\(target.map(String.init(describing:)) ?? "nil")"
         case let .suppressedFocusChanged(token, _):
             "suppressed_focus_changed token=\(token.map(String.init(describing:)) ?? "nil")"
+        case let .systemModalFocusChanged(token, _):
+            "system_modal_focus_changed token=\(token.map(String.init(describing:)) ?? "nil")"
         case let .workspaceFocusCleared(workspaceId, _):
             "workspace_focus_cleared workspace=\(workspaceId.uuidString)"
         case let .nativeFullscreenPlaceholderSelected(token, workspaceId, _):

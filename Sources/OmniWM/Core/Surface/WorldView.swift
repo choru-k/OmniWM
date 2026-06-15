@@ -29,6 +29,10 @@ struct WorldView {
         controller.workspaceManager.suppressedFocusToken
     }
 
+    var systemModalFocusToken: WindowToken? {
+        controller.workspaceManager.systemModalFocusToken
+    }
+
     var hasPendingNativeFullscreenTransition: Bool {
         controller.workspaceManager.hasPendingNativeFullscreenTransition
     }

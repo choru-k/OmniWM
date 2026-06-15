@@ -298,6 +298,7 @@ final class WorldStore {
              .nonManagedFocusTargetChanged,
              .selectionChanged,
              .suppressedFocusChanged,
+             .systemModalFocusChanged,
              .systemSleep,
              .systemWake,
              .topologyChanged,

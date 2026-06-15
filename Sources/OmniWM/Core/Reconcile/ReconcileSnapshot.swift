@@ -153,6 +153,7 @@ struct FocusSessionSnapshot: Equatable {
     var isNonManagedFocusActive: Bool = false
     var nonManagedFocusToken: WindowToken? = nil
     var suppressedFocusToken: WindowToken? = nil
+    var systemModalFocusToken: WindowToken? = nil
     var interactionMonitorId: Monitor.ID? = nil
     var previousInteractionMonitorId: Monitor.ID? = nil
 }

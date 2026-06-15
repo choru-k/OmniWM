@@ -1050,13 +1050,7 @@ final class WMController {
 
         let axFacts = facts.ax
         if axFacts.attributeFetchSucceeded {
-            if axFacts.role == kAXSheetRole as String
-                || axFacts.subrole == kAXDialogSubrole as String
-                || axFacts.subrole == kAXSystemDialogSubrole as String
-            {
-                return true
-            }
-            return false
+            return AXWindowService.isSystemModalSurface(role: axFacts.role, subrole: axFacts.subrole)
         }
 
         if windowServer.hasDocumentTag {

@@ -156,6 +156,103 @@ final class RuntimeArchitectureTests: XCTestCase {
         XCTAssertTrue(plan.mutatesRuntimeState)
     }
 
+    func testIsSystemModalSurfaceClassification() {
+        XCTAssertTrue(AXWindowService.isSystemModalSurface(role: kAXSheetRole as String, subrole: nil))
+        XCTAssertTrue(AXWindowService.isSystemModalSurface(role: nil, subrole: kAXDialogSubrole as String))
+        XCTAssertTrue(AXWindowService.isSystemModalSurface(role: nil, subrole: kAXSystemDialogSubrole as String))
+        XCTAssertFalse(
+            AXWindowService.isSystemModalSurface(
+                role: kAXWindowRole as String,
+                subrole: kAXStandardWindowSubrole as String
+            )
+        )
+        XCTAssertFalse(AXWindowService.isSystemModalSurface(role: nil, subrole: nil))
+    }
+
+    func testSystemModalFocusChangedSetsToken() {
+        let token = WindowToken(pid: 100, windowId: 42)
+        let plan = StateReducer.reduce(
+            event: .systemModalFocusChanged(token: token, source: .workspaceManager),
+            existingEntry: nil,
+            currentSnapshot: Self.snapshot(),
+            monitors: []
+        )
+
+        XCTAssertEqual(plan.focusSession?.systemModalFocusToken, token)
+    }
+
+    func testSystemModalFocusChangedClearsToken() {
+        let token = WindowToken(pid: 100, windowId: 42)
+        let modalSnapshot = ReconcileSnapshot(
+            topologyProfile: TopologyProfile(sortedMonitors: []),
+            focusSession: FocusSessionSnapshot(systemModalFocusToken: token),
+            windows: [],
+            viewports: [:],
+            layouts: [:]
+        )
+
+        let plan = StateReducer.reduce(
+            event: .systemModalFocusChanged(token: nil, source: .workspaceManager),
+            existingEntry: nil,
+            currentSnapshot: modalSnapshot,
+            monitors: []
+        )
+
+        XCTAssertNil(plan.focusSession?.systemModalFocusToken)
+    }
+
+    func testWindowRekeyRekeysSystemModalFocusToken() {
+        let workspaceId = WorkspaceDescriptor.ID()
+        let oldToken = WindowToken(pid: 100, windowId: 42)
+        let newToken = WindowToken(pid: 100, windowId: 43)
+        let snapshot = Self.snapshot(
+            systemModalFocusToken: oldToken,
+            windows: [Self.window(token: oldToken, workspaceId: workspaceId)]
+        )
+
+        let plan = StateReducer.reduce(
+            event: .windowRekeyed(
+                from: oldToken,
+                to: newToken,
+                workspaceId: workspaceId,
+                monitorId: nil,
+                reason: .manualRekey,
+                newAXRef: AXWindowRef(element: AXUIElementCreateApplication(oldToken.pid), windowId: newToken.windowId),
+                managedReplacementMetadata: nil,
+                source: .workspaceManager
+            ),
+            existingEntry: nil,
+            currentSnapshot: snapshot,
+            monitors: []
+        )
+
+        XCTAssertEqual(plan.focusSession?.systemModalFocusToken, newToken)
+    }
+
+    func testWindowRemovalClearsMatchingSystemModalFocusTokenOnly() {
+        let workspaceId = WorkspaceDescriptor.ID()
+        let modalToken = WindowToken(pid: 100, windowId: 42)
+        let removedToken = WindowToken(pid: 100, windowId: 43)
+        let matchingSnapshot = Self.snapshot(systemModalFocusToken: modalToken)
+        let nonmatchingSnapshot = Self.snapshot(systemModalFocusToken: modalToken)
+
+        let matchingPlan = StateReducer.reduce(
+            event: .windowRemoved(token: modalToken, workspaceId: workspaceId, source: .workspaceManager),
+            existingEntry: nil,
+            currentSnapshot: matchingSnapshot,
+            monitors: []
+        )
+        let nonmatchingPlan = StateReducer.reduce(
+            event: .windowRemoved(token: removedToken, workspaceId: workspaceId, source: .workspaceManager),
+            existingEntry: nil,
+            currentSnapshot: nonmatchingSnapshot,
+            monitors: []
+        )
+
+        XCTAssertNil(matchingPlan.focusSession?.systemModalFocusToken)
+        XCTAssertEqual(nonmatchingPlan.focusSession?.systemModalFocusToken, modalToken)
+    }
+
     @MainActor
     func testManagedFocusRequestCarriesOriginAndResistsPointerDowngrade() {
         let bridge = IntentLedger()
@@ -3189,6 +3286,7 @@ final class RuntimeArchitectureTests: XCTestCase {
     private static func snapshot(
         focusedToken: WindowToken? = nil,
         pendingManagedFocus: PendingManagedFocusSnapshot = .empty,
+        systemModalFocusToken: WindowToken? = nil,
         interactionMonitorId: Monitor.ID? = nil,
         previousInteractionMonitorId: Monitor.ID? = nil,
         windows: [ReconcileWindowSnapshot] = [],
@@ -3202,6 +3300,7 @@ final class RuntimeArchitectureTests: XCTestCase {
                 pendingManagedFocus: pendingManagedFocus,
                 focusLease: nil,
                 isNonManagedFocusActive: false,
+                systemModalFocusToken: systemModalFocusToken,
                 interactionMonitorId: interactionMonitorId,
                 previousInteractionMonitorId: previousInteractionMonitorId
             ),

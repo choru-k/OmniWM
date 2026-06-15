@@ -412,8 +412,34 @@ enum AXWindowService {
         return subrole
     }
 
+    static func roleAndSubrole(_ window: AXWindowRef) -> (role: String?, subrole: String?) {
+        let attributes = [
+            kAXRoleAttribute as CFString,
+            kAXSubroleAttribute as CFString
+        ] as CFArray
+        var valuesPtr: CFArray?
+        let result = AXUIElementCopyMultipleAttributeValues(window.element, attributes, .init(), &valuesPtr)
+        guard result == .success, let values = valuesPtr as? [Any], values.count == 2 else { return (nil, nil) }
+        return (values[0] as? String, values[1] as? String)
+    }
+
+    static func isSystemModalSurface(role: String?, subrole: String?) -> Bool {
+        role == kAXSheetRole as String
+            || subrole == kAXDialogSubrole as String
+            || subrole == kAXSystemDialogSubrole as String
+    }
+
+    static func isSystemModalSurface(_ window: AXWindowRef) -> Bool {
+        let attributes = roleAndSubrole(window)
+        return isSystemModalSurface(role: attributes.role, subrole: attributes.subrole)
+    }
+
     static func isFullscreen(_ window: AXWindowRef) -> Bool {
-        if let subrole = subrole(window), subrole == "AXFullScreenWindow" {
+        isFullscreen(window, subrole: subrole(window))
+    }
+
+    static func isFullscreen(_ window: AXWindowRef, subrole: String?) -> Bool {
+        if subrole == "AXFullScreenWindow" {
             return true
         }
 

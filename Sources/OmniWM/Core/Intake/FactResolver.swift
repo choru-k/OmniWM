@@ -4,6 +4,7 @@ import Foundation
 struct FocusedWindowFact: Sendable {
     let axRef: AXWindowRef
     let isFullscreen: Bool
+    let isSystemModalSurface: Bool
 }
 
 struct ActivationFacts: Sendable {
@@ -121,9 +122,14 @@ final class FactResolver {
         guard CFGetTypeID(focusedWindow) == AXUIElementGetTypeID() else { return nil }
         let axElement = unsafeDowncast(focusedWindow, to: AXUIElement.self)
         guard let axRef = try? AXWindowRef(element: axElement) else { return nil }
+        let attributes = AXWindowService.roleAndSubrole(axRef)
         return FocusedWindowFact(
             axRef: axRef,
-            isFullscreen: AXWindowService.isFullscreen(axRef)
+            isFullscreen: AXWindowService.isFullscreen(axRef, subrole: attributes.subrole),
+            isSystemModalSurface: AXWindowService.isSystemModalSurface(
+                role: attributes.role,
+                subrole: attributes.subrole
+            )
         )
     }
 }

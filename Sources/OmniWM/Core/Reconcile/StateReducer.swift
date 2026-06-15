@@ -278,6 +278,11 @@ enum StateReducer {
             focusSession.suppressedFocusToken = token
             setFocusSession(focusSession, current: currentSnapshot.focusSession, plan: &plan)
 
+        case let .systemModalFocusChanged(token, _):
+            var focusSession = currentSnapshot.focusSession
+            focusSession.systemModalFocusToken = token
+            setFocusSession(focusSession, current: currentSnapshot.focusSession, plan: &plan)
+
         case let .workspaceFocusCleared(workspaceId, _):
             var focusSession = currentSnapshot.focusSession
             focusSession.clearPendingManagedFocus(
@@ -555,6 +560,9 @@ enum StateReducer {
         if focusSession.suppressedFocusToken == oldToken {
             focusSession.suppressedFocusToken = newToken
         }
+        if focusSession.systemModalFocusToken == oldToken {
+            focusSession.systemModalFocusToken = newToken
+        }
         return focusSession
     }
 
@@ -569,6 +577,9 @@ enum StateReducer {
         }
         if focusSession.pendingManagedFocus.token == token {
             focusSession.pendingManagedFocus = .empty
+        }
+        if focusSession.systemModalFocusToken == token {
+            focusSession.systemModalFocusToken = nil
         }
         focusSession.clearRememberedFocus(token, workspaceId: workspaceId)
         return focusSession

@@ -40,6 +40,7 @@ enum SurfaceDerivation {
         guard let token = world.renderableFocusToken else { return nil }
         guard !world.isOwnedWindow(windowId: token.windowId) else { return nil }
         guard !world.hasPendingNativeFullscreenTransition else { return nil }
+        guard world.systemModalFocusToken != token else { return nil }
 
         if let entry = world.entry(for: token) {
             guard world.suppressedFocusToken != token,

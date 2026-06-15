@@ -125,6 +125,7 @@ struct RestorePlanner {
              .selectionChanged,
              .spaceTopologyChanged,
              .suppressedFocusChanged,
+             .systemModalFocusChanged,
              .userCommand,
              .viewportChanged,
              .viewportCommitted,
