@@ -310,7 +310,6 @@ enum NiriWindowMoveResult {
             workspaceId: wsId,
             monitor: refreshInput.monitor,
             windows: refreshInput.windows,
-            plannedSeq: refreshInput.plannedSeq,
             viewportState: effectiveViewportState,
             preferredFocusToken: controller.workspaceManager.preferredFocusToken(in: wsId),
             hasCompletedInitialRefresh: controller.layoutRefreshController.layoutState.hasCompletedInitialRefresh,
@@ -367,11 +366,9 @@ enum NiriWindowMoveResult {
         return WorkspaceLayoutPlan(
             workspaceId: snapshot.workspaceId,
             monitor: snapshot.monitor,
-            plannedSeq: snapshot.plannedSeq,
             sessionPatch: WorkspaceSessionPatch(
                 workspaceId: snapshot.workspaceId,
-                viewportState: nil,
-                plannedSeq: snapshot.plannedSeq
+                viewportState: nil
             ),
             diff: diff,
             isAnimationTick: animationTime != nil
@@ -914,12 +911,10 @@ enum NiriWindowMoveResult {
         return WorkspaceLayoutPlan(
             workspaceId: pass.wsId,
             monitor: snapshot.monitor,
-            plannedSeq: snapshot.plannedSeq,
             sessionPatch: WorkspaceSessionPatch(
                 workspaceId: pass.wsId,
                 viewportState: state,
-                rememberedFocusToken: rememberedFocusToken,
-                plannedSeq: snapshot.plannedSeq
+                rememberedFocusToken: rememberedFocusToken
             ),
             diff: diff,
             animationDirectives: directives

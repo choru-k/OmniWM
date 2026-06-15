@@ -54,12 +54,4 @@ extension ViewportState {
     mutating func clearOffsetTransition() {
         offsetTransition = OffsetTransition()
     }
-
-    mutating func resolveCommitConflicts(against current: ViewportState, hasStaleSelection: Bool) {
-        if hasStaleSelection {
-            selectedNodeId = current.selectedNodeId
-            activeColumnIndex = current.activeColumnIndex
-            selectionProgress = current.selectionProgress
-        }
-    }
 }

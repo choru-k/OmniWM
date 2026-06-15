@@ -28,7 +28,6 @@ struct WorkspaceRefreshInput {
     let monitor: LayoutMonitorSnapshot
     let windows: [LayoutWindowSnapshot]
     let isActiveWorkspace: Bool
-    let plannedSeq: UInt64
 }
 
 struct NiriWindowRemovalSeed {
@@ -40,7 +39,6 @@ struct NiriWorkspaceSnapshot {
     let workspaceId: WorkspaceDescriptor.ID
     let monitor: LayoutMonitorSnapshot
     let windows: [LayoutWindowSnapshot]
-    let plannedSeq: UInt64
     let viewportState: ViewportState
     let preferredFocusToken: WindowToken?
     let hasCompletedInitialRefresh: Bool
@@ -56,7 +54,6 @@ struct DwindleWorkspaceSnapshot {
     let workspaceId: WorkspaceDescriptor.ID
     let monitor: LayoutMonitorSnapshot
     let windows: [LayoutWindowSnapshot]
-    let plannedSeq: UInt64
     let preferredFocusToken: WindowToken?
     let settings: ResolvedDwindleSettings
     let isActiveWorkspace: Bool
@@ -90,7 +87,7 @@ struct WorkspaceSessionPatch {
     let workspaceId: WorkspaceDescriptor.ID
     var viewportState: ViewportState?
     var rememberedFocusToken: WindowToken?
-    var plannedSeq: UInt64
+    var plannedSeq: UInt64 = 0
 }
 
 struct WorkspaceSessionTransfer {
@@ -119,7 +116,6 @@ struct EffectPlanEffects {
 struct WorkspaceLayoutPlan {
     let workspaceId: WorkspaceDescriptor.ID
     let monitor: LayoutMonitorSnapshot
-    var plannedSeq: UInt64
     var sessionPatch: WorkspaceSessionPatch
     var diff: WorkspaceLayoutDiff
     var niriRestorePlacements: [WindowToken: PersistedNiriPlacement] = [:]

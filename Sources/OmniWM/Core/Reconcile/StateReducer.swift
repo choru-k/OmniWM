@@ -310,13 +310,9 @@ enum StateReducer {
             viewport.clearOffsetTransition()
             setViewport(viewport, for: workspaceId, currentSnapshot: currentSnapshot, plan: &plan)
 
-        case let .viewportCommitted(workspaceId, state, plannedSeq, _):
+        case let .viewportCommitted(workspaceId, state, _):
             var viewport = state
             viewport.clearOffsetTransition()
-            viewport.resolveCommitConflicts(
-                against: currentSnapshot.viewports[workspaceId] ?? ViewportState(),
-                hasStaleSelection: currentSnapshot.selectionSeqs[workspaceId, default: 0] > plannedSeq
-            )
             setViewport(viewport, for: workspaceId, currentSnapshot: currentSnapshot, plan: &plan)
 
         case let .viewportForgotten(workspaceIds, _):

@@ -17,7 +17,6 @@ struct LayoutBuildMetrics {
     private var statsByBucket: [Bucket: Stat] = [:]
     private(set) var totalBuilds = 0
     private(set) var completedRelayoutCycles = 0
-    private(set) var staleRelayoutReenqueues = 0
 
     mutating func recordBuild(seconds: Double, workspaceCount: Int, windowCount: Int) {
         let micros = Int((seconds * 1_000_000).rounded())
@@ -34,13 +33,9 @@ struct LayoutBuildMetrics {
         completedRelayoutCycles += 1
     }
 
-    mutating func recordStaleReenqueue() {
-        staleRelayoutReenqueues += 1
-    }
-
     func dump() -> String {
         var lines = [
-            "builds=\(totalBuilds) completedCycles=\(completedRelayoutCycles) staleReenqueues=\(staleRelayoutReenqueues)"
+            "builds=\(totalBuilds) completedCycles=\(completedRelayoutCycles)"
         ]
         guard !statsByBucket.isEmpty else {
             lines.append("no build samples")

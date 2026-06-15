@@ -1162,7 +1162,6 @@ final class RuntimeArchitectureTests: XCTestCase {
                 WorkspaceLayoutPlan(
                     workspaceId: workspaceId,
                     monitor: Self.layoutMonitorSnapshot(monitor),
-                    plannedSeq: plannedSeq,
                     sessionPatch: WorkspaceSessionPatch(
                         workspaceId: workspaceId,
                         plannedSeq: plannedSeq
@@ -2218,7 +2217,7 @@ final class RuntimeArchitectureTests: XCTestCase {
         )
         controller.workspaceManager.setNiriRestorePlacements(placements)
 
-        let plans = controller.workspaceManager.withEngineBuildScope {
+        let plans = controller.workspaceManager.withEngineMutationScope {
             controller.niriLayoutHandler.layoutWithNiriEngine(activeWorkspaces: [workspaceId])
         }
         let plan = try XCTUnwrap(plans.first)
@@ -2281,7 +2280,7 @@ final class RuntimeArchitectureTests: XCTestCase {
             to: workspaceId
         )
 
-        let plans = controller.workspaceManager.withEngineBuildScope {
+        let plans = controller.workspaceManager.withEngineMutationScope {
             controller.niriLayoutHandler.layoutWithNiriEngine(activeWorkspaces: [workspaceId])
         }
         let plan = try XCTUnwrap(plans.first)
@@ -2371,7 +2370,7 @@ final class RuntimeArchitectureTests: XCTestCase {
             )
         )
 
-        let plans = controller.workspaceManager.withEngineBuildScope {
+        let plans = controller.workspaceManager.withEngineMutationScope {
             controller.niriLayoutHandler.layoutWithNiriEngine(activeWorkspaces: [workspaceId])
         }
         let plan = try XCTUnwrap(plans.first)
@@ -2470,7 +2469,7 @@ final class RuntimeArchitectureTests: XCTestCase {
         XCTAssertNil(controller.workspaceManager.entry(for: oldToken))
         XCTAssertNotNil(controller.workspaceManager.entry(for: newToken))
 
-        let plans = controller.workspaceManager.withEngineBuildScope {
+        let plans = controller.workspaceManager.withEngineMutationScope {
             controller.niriLayoutHandler.layoutWithNiriEngine(
                 activeWorkspaces: [workspaceId],
                 useScrollAnimationPath: true
@@ -2523,8 +2522,7 @@ final class RuntimeArchitectureTests: XCTestCase {
         XCTAssertFalse(plans.isEmpty)
         for plan in plans {
             XCTAssertNil(plan.sessionPatch.viewportState)
-            XCTAssertEqual(plan.plannedSeq, committedSeq)
-            XCTAssertEqual(plan.sessionPatch.plannedSeq, plan.plannedSeq)
+            XCTAssertEqual(plan.sessionPatch.plannedSeq, committedSeq)
         }
     }
 
@@ -2563,8 +2561,7 @@ final class RuntimeArchitectureTests: XCTestCase {
         XCTAssertFalse(plans.isEmpty)
         for plan in plans {
             XCTAssertNil(plan.sessionPatch.viewportState)
-            XCTAssertEqual(plan.plannedSeq, committedSeq)
-            XCTAssertEqual(plan.sessionPatch.plannedSeq, plan.plannedSeq)
+            XCTAssertEqual(plan.sessionPatch.plannedSeq, committedSeq)
         }
     }
 
@@ -2962,7 +2959,7 @@ final class RuntimeArchitectureTests: XCTestCase {
         )
         controller.workspaceManager.setNiriRestorePlacements(placements)
 
-        let plans = controller.workspaceManager.withEngineBuildScope {
+        let plans = controller.workspaceManager.withEngineMutationScope {
             controller.niriLayoutHandler.layoutWithNiriEngine(activeWorkspaces: [workspaceId])
         }
         let plan = try XCTUnwrap(plans.first, file: file, line: line)

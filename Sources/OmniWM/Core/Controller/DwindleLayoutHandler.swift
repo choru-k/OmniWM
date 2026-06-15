@@ -334,7 +334,6 @@ import QuartzCore
             workspaceId: wsId,
             monitor: refreshInput.monitor,
             windows: refreshInput.windows,
-            plannedSeq: refreshInput.plannedSeq,
             preferredFocusToken: controller.workspaceManager.preferredFocusToken(in: wsId),
             settings: controller.settings.resolvedDwindleSettings(for: monitor),
             isActiveWorkspace: refreshInput.isActiveWorkspace
@@ -405,11 +404,9 @@ import QuartzCore
         return WorkspaceLayoutPlan(
             workspaceId: snapshot.workspaceId,
             monitor: snapshot.monitor,
-            plannedSeq: snapshot.plannedSeq,
             sessionPatch: WorkspaceSessionPatch(
                 workspaceId: snapshot.workspaceId,
-                rememberedFocusToken: rememberedFocusToken,
-                plannedSeq: snapshot.plannedSeq
+                rememberedFocusToken: rememberedFocusToken
             ),
             diff: diff,
             animationDirectives: directives
@@ -436,10 +433,8 @@ import QuartzCore
         return WorkspaceLayoutPlan(
             workspaceId: snapshot.workspaceId,
             monitor: snapshot.monitor,
-            plannedSeq: snapshot.plannedSeq,
             sessionPatch: WorkspaceSessionPatch(
-                workspaceId: snapshot.workspaceId,
-                plannedSeq: snapshot.plannedSeq
+                workspaceId: snapshot.workspaceId
             ),
             diff: diff
         )
@@ -471,10 +466,8 @@ import QuartzCore
         return WorkspaceLayoutPlan(
             workspaceId: snapshot.workspaceId,
             monitor: snapshot.monitor,
-            plannedSeq: snapshot.plannedSeq,
             sessionPatch: WorkspaceSessionPatch(
-                workspaceId: snapshot.workspaceId,
-                plannedSeq: snapshot.plannedSeq
+                workspaceId: snapshot.workspaceId
             ),
             diff: diff,
             isAnimationTick: true

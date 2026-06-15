@@ -222,7 +222,6 @@ final class WorkspaceManager {
             focusSession: world.focus,
             windows: windowSnapshots,
             viewports: world.viewports,
-            selectionSeqs: world.selectionSeqs,
             layouts: layouts
         )
     }
@@ -330,7 +329,7 @@ final class WorkspaceManager {
         case let .selectionChanged(workspaceId, _, _),
              let .viewportChanged(workspaceId, _, _):
             workspaceId
-        case let .viewportCommitted(workspaceId, _, _, _):
+        case let .viewportCommitted(workspaceId, _, _):
             workspaceId
         default:
             nil
@@ -341,7 +340,7 @@ final class WorkspaceManager {
         switch event {
         case let .viewportChanged(_, state, _):
             state
-        case let .viewportCommitted(_, state, _, _):
+        case let .viewportCommitted(_, state, _):
             state
         default:
             nil
@@ -1523,7 +1522,6 @@ final class WorkspaceManager {
                 .viewportCommitted(
                     workspaceId: patch.workspaceId,
                     state: viewportState,
-                    plannedSeq: patch.plannedSeq,
                     source: .workspaceManager
                 )
             )
@@ -2923,7 +2921,6 @@ final class WorkspaceManager {
                 }
                 let committedSeq = self.world.seq
                 for index in plans.indices {
-                    plans[index].plannedSeq = committedSeq
                     plans[index].sessionPatch.plannedSeq = committedSeq
                 }
             },
@@ -2950,10 +2947,6 @@ final class WorkspaceManager {
             next: world.viewports[workspaceId] ?? committed,
             transition: state.offsetTransition
         )
-    }
-
-    func withEngineBuildScope<T>(_ body: () -> T) -> T {
-        world.withEngineBuildScope(body)
     }
 
     func withNiriViewportState(

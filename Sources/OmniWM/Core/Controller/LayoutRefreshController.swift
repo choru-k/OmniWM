@@ -82,17 +82,6 @@ import QuartzCore
         }
     }
 
-    private struct LayoutPlanExecutionResult {
-        var didExecute = false
-        var rejectedWorkspaceIds: Set<WorkspaceDescriptor.ID> = []
-        var acceptedSeqs: [WorkspaceDescriptor.ID: AcceptedSeq] = [:]
-    }
-
-    private struct CurrentLayoutPlans {
-        var plans: [WorkspaceLayoutPlan] = []
-        var rejectedWorkspaceIds: Set<WorkspaceDescriptor.ID> = []
-    }
-
     weak var controller: WMController?
     static let hiddenWindowEdgeRevealEpsilon: CGFloat = 1.0
     private static let delayedRevealVerificationDelay: Duration = .milliseconds(50)
@@ -446,38 +435,14 @@ import QuartzCore
         }
     }
 
-    @discardableResult
-    private func executeLayoutPlans(_ plans: [WorkspaceLayoutPlan]) -> LayoutPlanExecutionResult {
-        var result = LayoutPlanExecutionResult()
+    private func executeLayoutPlans(_ plans: [WorkspaceLayoutPlan]) -> [WorkspaceDescriptor.ID: AcceptedSeq] {
+        var acceptedSeqs: [WorkspaceDescriptor.ID: AcceptedSeq] = [:]
         for plan in plans {
             if let acceptedSeq = executeLayoutPlanReturningAcceptedSeq(plan) {
-                result.didExecute = true
-                result.acceptedSeqs[plan.workspaceId] = acceptedSeq
-            } else {
-                result.rejectedWorkspaceIds.insert(plan.workspaceId)
+                acceptedSeqs[plan.workspaceId] = acceptedSeq
             }
         }
-        return result
-    }
-
-    private func currentLayoutPlans(
-        _ plans: [WorkspaceLayoutPlan],
-        controller: WMController
-    ) -> CurrentLayoutPlans {
-        var current = CurrentLayoutPlans()
-        current.plans.reserveCapacity(plans.count)
-        for plan in plans {
-            if controller.workspaceManager.isSeqCurrent(
-                plan.plannedSeq,
-                for: plan.workspaceId,
-                domains: .layoutCommit
-            ) {
-                current.plans.append(plan)
-            } else {
-                current.rejectedWorkspaceIds.insert(plan.workspaceId)
-            }
-        }
-        return current
+        return acceptedSeqs
     }
 
     @discardableResult
@@ -487,19 +452,7 @@ import QuartzCore
 
     func executeLayoutPlanReturningAcceptedSeq(_ plan: WorkspaceLayoutPlan) -> AcceptedSeq? {
         guard let controller else { return nil }
-        guard controller.workspaceManager.isSeqCurrent(
-            plan.plannedSeq,
-            for: plan.workspaceId,
-            domains: .layoutCommit
-        ) else {
-            return nil
-        }
 
-        let focusSeqAccepted = controller.workspaceManager.isSeqCurrent(
-            plan.plannedSeq,
-            for: plan.workspaceId,
-            domains: .focusCommit
-        )
         controller.withRuntimeFrameJobCancellationSuppressed {
             applySessionPatch(plan.sessionPatch)
             diffExecutor.execute(plan)
@@ -508,37 +461,18 @@ import QuartzCore
         applyAnimationDirectives(
             plan.animationDirectives,
             workspaceId: plan.workspaceId,
-            focusSeqAccepted: focusSeqAccepted
+            focusSeqAccepted: true
         )
         controller.surfaceReconciler.noteWorldChanged()
         return AcceptedSeq(
             after: controller.workspaceManager.worldSeq,
-            domains: focusSeqAccepted ? .layoutCommit.union(.focusCommit) : .layoutCommit
+            domains: .layoutCommit.union(.focusCommit)
         )
     }
 
     private func executeEffectPlan(_ plan: EffectPlan, generation: UInt64) async -> Bool {
         guard let controller else { return false }
         guard isCurrentRefreshGeneration(generation) else { return false }
-
-        let currentPlans = currentLayoutPlans(plan.workspacePlans, controller: controller)
-        var rejectedWorkspaceIds = currentPlans.rejectedWorkspaceIds
-        if !plan.workspacePlans.isEmpty, currentPlans.plans.isEmpty {
-            enqueueRefresh(
-                staleLayoutRefresh(
-                    affectedWorkspaceIds: currentPlans.rejectedWorkspaceIds,
-                    postLayoutActions: plan.postLayoutActions
-                )
-            )
-            layoutState.didExecuteEffectPlan = true
-            if var activeRefresh = layoutState.activeRefresh {
-                activeRefresh.postLayoutActions.removeAll()
-                activeRefresh.followUpRefresh = nil
-                activeRefresh.needsVisibilityReconciliation = false
-                layoutState.activeRefresh = activeRefresh
-            }
-            return true
-        }
 
         activeFrameContext = RefreshFrameContext()
         defer { activeFrameContext = nil }
@@ -564,15 +498,7 @@ import QuartzCore
             }
         }
 
-        let layoutResult = executeLayoutPlans(currentPlans.plans)
-        var acceptedSeqs = layoutResult.acceptedSeqs
-        if !plan.workspacePlans.isEmpty, !layoutResult.didExecute {
-            return false
-        }
-        if !layoutResult.rejectedWorkspaceIds.isEmpty {
-            rejectedWorkspaceIds.formUnion(layoutResult.rejectedWorkspaceIds)
-        }
-
+        var acceptedSeqs = executeLayoutPlans(plan.workspacePlans)
         layoutState.didExecuteEffectPlan = true
 
         if plan.effects.visibility != nil {
@@ -591,19 +517,9 @@ import QuartzCore
             }
         }
 
-        if !rejectedWorkspaceIds.isEmpty {
-            enqueueRefresh(
-                staleLayoutRefresh(
-                    affectedWorkspaceIds: rejectedWorkspaceIds,
-                    postLayoutActions: forwardedPostLayoutActions(acceptedSeqs)
-                )
-            )
-        }
-
         let activeWorkspaceIdsForFocusValidation = currentEffectActiveWorkspaceIds ?? currentActiveWorkspaceIds()
         for workspaceId in plan.effects.focusValidationWorkspaceIds
             where activeWorkspaceIdsForFocusValidation.contains(workspaceId)
-            && !rejectedWorkspaceIds.contains(workspaceId)
         {
             let preferredRecoveryToken = plan.effects.focusValidationPreferredTokens[workspaceId]
             controller.ensureFocusedTokenValid(
@@ -612,9 +528,7 @@ import QuartzCore
             )
         }
 
-        for postLayoutAction in forwardedPostLayoutActions(acceptedSeqs)
-            where !postLayoutAction.hasWorkspace(in: rejectedWorkspaceIds)
-        {
+        for postLayoutAction in forwardedPostLayoutActions(acceptedSeqs) {
             postLayoutAction.runIfCurrent(using: controller.workspaceManager)
         }
 
@@ -774,8 +688,7 @@ import QuartzCore
             workspaceId: workspaceId,
             monitor: monitorSnapshot,
             windows: windows,
-            isActiveWorkspace: isActiveWorkspace,
-            plannedSeq: controller.workspaceManager.worldSeq
+            isActiveWorkspace: isActiveWorkspace
         )
     }
 
@@ -980,20 +893,6 @@ import QuartzCore
         for affectedWorkspaceIds: Set<WorkspaceDescriptor.ID>
     ) -> Set<WorkspaceDescriptor.ID> {
         affectedWorkspaceIds.isEmpty ? currentActiveWorkspaceIds() : affectedWorkspaceIds
-    }
-
-    private func staleLayoutRefresh(
-        affectedWorkspaceIds: Set<WorkspaceDescriptor.ID>,
-        postLayoutActions: [RefreshPostLayoutAction]
-    ) -> ScheduledRefresh {
-        layoutBuildMetrics.recordStaleReenqueue()
-        var refresh = ScheduledRefresh(
-            kind: .relayout,
-            reason: .staleLayoutPlan,
-            affectedWorkspaceIds: affectedWorkspaceIds
-        )
-        refresh.postLayoutActions = postLayoutActions.filter { $0.hasWorkspace(in: affectedWorkspaceIds) }
-        return refresh
     }
 
     private func scheduleFullRescan(reason: RefreshReason) {
