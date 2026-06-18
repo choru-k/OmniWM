@@ -1,44 +1,100 @@
 import Carbon
 import Foundation
 
+enum ModifierSide: Equatable, Hashable {
+    case either
+    case left
+    case right
+}
+
+struct SidedModifiers: Equatable, Hashable {
+    var left: UInt32
+    var right: UInt32
+
+    init(left: UInt32 = 0, right: UInt32 = 0) {
+        self.left = left
+        self.right = right
+    }
+
+    static let none = SidedModifiers()
+
+    var isEmpty: Bool {
+        left == 0 && right == 0
+    }
+
+    func side(for modifier: UInt32) -> ModifierSide {
+        if left & modifier != 0 { return .left }
+        if right & modifier != 0 { return .right }
+        return .either
+    }
+}
+
 struct KeyBinding: Equatable, Hashable {
     let keyCode: UInt32
     let modifiers: UInt32
+    let sidedModifiers: SidedModifiers
 
     static let unassigned = KeyBinding(keyCode: UInt32.max, modifiers: 0)
 
-    init(keyCode: UInt32, modifiers: UInt32) {
+    init(keyCode: UInt32, modifiers: UInt32, sidedModifiers: SidedModifiers = .none) {
         self.keyCode = keyCode
         self.modifiers = modifiers
+        self.sidedModifiers = sidedModifiers
     }
 
     var isUnassigned: Bool {
         keyCode == UInt32.max && modifiers == 0
     }
 
+    var side: ModifierSide {
+        if sidedModifiers.isEmpty { return .either }
+        if sidedModifiers.left == modifiers, sidedModifiers.right == 0 { return .left }
+        if sidedModifiers.right == modifiers, sidedModifiers.left == 0 { return .right }
+        return .either
+    }
+
+    func settingSide(_ side: ModifierSide) -> KeyBinding {
+        let sided: SidedModifiers
+        switch side {
+        case .either: sided = .none
+        case .left: sided = SidedModifiers(left: modifiers)
+        case .right: sided = SidedModifiers(right: modifiers)
+        }
+        return KeyBinding(keyCode: keyCode, modifiers: modifiers, sidedModifiers: sided)
+    }
+
     var displayString: String {
         if isUnassigned {
             return "Unassigned"
         }
-        return KeySymbolMapper.displayString(keyCode: keyCode, modifiers: modifiers)
+        return KeySymbolMapper.displayString(keyCode: keyCode, modifiers: modifiers, sides: sidedModifiers)
     }
 
     var humanReadableString: String {
         if isUnassigned {
             return "Unassigned"
         }
-        return KeySymbolMapper.humanReadableString(keyCode: keyCode, modifiers: modifiers)
+        return KeySymbolMapper.humanReadableString(keyCode: keyCode, modifiers: modifiers, sides: sidedModifiers)
     }
 
     func conflicts(with other: KeyBinding) -> Bool {
         guard !isUnassigned, !other.isUnassigned else { return false }
-        return keyCode == other.keyCode && modifiers == other.modifiers
+        guard keyCode == other.keyCode, modifiers == other.modifiers else { return false }
+        var remaining = modifiers
+        while remaining != 0 {
+            let bit = remaining & (0 &- remaining)
+            remaining &= remaining - 1
+            let lhs = sidedModifiers.side(for: bit)
+            let rhs = other.sidedModifiers.side(for: bit)
+            if lhs != .either, rhs != .either, lhs != rhs { return false }
+        }
+        return true
     }
 }
 
 extension KeyBinding: Codable {
     private enum CodingKeys: String, CodingKey {
-        case keyCode, modifiers
+        case keyCode, modifiers, left, right
     }
 
     init(from decoder: Decoder) throws {
@@ -52,6 +108,10 @@ extension KeyBinding: Codable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         keyCode = try container.decode(UInt32.self, forKey: .keyCode)
         modifiers = try container.decode(UInt32.self, forKey: .modifiers)
+        sidedModifiers = SidedModifiers(
+            left: try container.decodeIfPresent(UInt32.self, forKey: .left) ?? 0,
+            right: try container.decodeIfPresent(UInt32.self, forKey: .right) ?? 0
+        )
     }
 
     func encode(to encoder: Encoder) throws {
@@ -62,6 +122,12 @@ extension KeyBinding: Codable {
             var container = encoder.container(keyedBy: CodingKeys.self)
             try container.encode(keyCode, forKey: .keyCode)
             try container.encode(modifiers, forKey: .modifiers)
+            if sidedModifiers.left != 0 {
+                try container.encode(sidedModifiers.left, forKey: .left)
+            }
+            if sidedModifiers.right != 0 {
+                try container.encode(sidedModifiers.right, forKey: .right)
+            }
         }
     }
 }

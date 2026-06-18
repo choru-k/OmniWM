@@ -124,13 +124,29 @@ enum KeySymbolMapper {
 
     static let hyperModifiers = UInt32(controlKey | optionKey | shiftKey | cmdKey)
 
-    static func modifierSymbols(_ modifiers: UInt32) -> String {
-        if modifiers == hyperModifiers { return "Hyper+" }
+    private struct ModifierDescriptor {
+        let carbon: UInt32
+        let name: String
+        let symbol: String
+    }
+
+    private static let orderedModifiers: [ModifierDescriptor] = [
+        ModifierDescriptor(carbon: UInt32(controlKey), name: "Control", symbol: "⌃"),
+        ModifierDescriptor(carbon: UInt32(optionKey), name: "Option", symbol: "⌥"),
+        ModifierDescriptor(carbon: UInt32(shiftKey), name: "Shift", symbol: "⇧"),
+        ModifierDescriptor(carbon: UInt32(cmdKey), name: "Command", symbol: "⌘")
+    ]
+
+    static func modifierSymbols(_ modifiers: UInt32, sides: SidedModifiers = .none) -> String {
+        if sides.isEmpty, modifiers == hyperModifiers { return "Hyper+" }
         var symbols = ""
-        if modifiers & UInt32(controlKey) != 0 { symbols += "⌃" }
-        if modifiers & UInt32(optionKey) != 0 { symbols += "⌥" }
-        if modifiers & UInt32(shiftKey) != 0 { symbols += "⇧" }
-        if modifiers & UInt32(cmdKey) != 0 { symbols += "⌘" }
+        for modifier in orderedModifiers where modifiers & modifier.carbon != 0 {
+            switch sides.side(for: modifier.carbon) {
+            case .either: symbols += modifier.symbol
+            case .left: symbols += "L" + modifier.symbol
+            case .right: symbols += "R" + modifier.symbol
+            }
+        }
         return symbols
     }
 
@@ -138,17 +154,20 @@ enum KeySymbolMapper {
         keyDescriptors[keyCode]?.compact ?? "?"
     }
 
-    static func displayString(keyCode: UInt32, modifiers: UInt32) -> String {
-        modifierSymbols(modifiers) + keySymbol(keyCode)
+    static func displayString(keyCode: UInt32, modifiers: UInt32, sides: SidedModifiers = .none) -> String {
+        modifierSymbols(modifiers, sides: sides) + keySymbol(keyCode)
     }
 
-    static func modifierNames(_ modifiers: UInt32) -> String {
-        if modifiers == hyperModifiers { return "Hyper" }
+    static func modifierNames(_ modifiers: UInt32, sides: SidedModifiers = .none) -> String {
+        if sides.isEmpty, modifiers == hyperModifiers { return "Hyper" }
         var names: [String] = []
-        if modifiers & UInt32(controlKey) != 0 { names.append("Control") }
-        if modifiers & UInt32(optionKey) != 0 { names.append("Option") }
-        if modifiers & UInt32(shiftKey) != 0 { names.append("Shift") }
-        if modifiers & UInt32(cmdKey) != 0 { names.append("Command") }
+        for modifier in orderedModifiers where modifiers & modifier.carbon != 0 {
+            switch sides.side(for: modifier.carbon) {
+            case .either: names.append(modifier.name)
+            case .left: names.append("Left " + modifier.name)
+            case .right: names.append("Right " + modifier.name)
+            }
+        }
         return names.joined(separator: "+")
     }
 
@@ -156,8 +175,8 @@ enum KeySymbolMapper {
         keyDescriptors[keyCode]?.name ?? "?"
     }
 
-    static func humanReadableString(keyCode: UInt32, modifiers: UInt32) -> String {
-        let mods = modifierNames(modifiers)
+    static func humanReadableString(keyCode: UInt32, modifiers: UInt32, sides: SidedModifiers = .none) -> String {
+        let mods = modifierNames(modifiers, sides: sides)
         let key = keyName(keyCode)
         return mods.isEmpty ? key : mods + "+" + key
     }
@@ -198,11 +217,35 @@ enum KeySymbolMapper {
         }
         guard let keyPart = parts.last, let keyCode = keyCode(named: keyPart) else { return nil }
         var modifiers: UInt32 = 0
+        var left: UInt32 = 0
+        var right: UInt32 = 0
         for part in parts.dropLast() {
-            guard let flag = nameToModifier[part] ?? normalizedNameToModifier[normalizeName(part)] else { return nil }
-            modifiers |= flag
+            guard let token = modifierToken(named: part) else { return nil }
+            modifiers |= token.flag
+            switch token.side {
+            case .either: break
+            case .left: left |= token.flag
+            case .right: right |= token.flag
+            }
         }
-        return KeyBinding(keyCode: keyCode, modifiers: modifiers)
+        return KeyBinding(
+            keyCode: keyCode,
+            modifiers: modifiers,
+            sidedModifiers: SidedModifiers(left: left, right: right)
+        )
+    }
+
+    static func modifierToken(named name: String) -> (flag: UInt32, side: ModifierSide)? {
+        if let flag = nameToModifier[name] ?? normalizedNameToModifier[normalizeName(name)] {
+            return (flag, .either)
+        }
+        let normalized = normalizeName(name)
+        for modifier in orderedModifiers {
+            let base = normalizeName(modifier.name)
+            if normalized == "left" + base { return (modifier.carbon, .left) }
+            if normalized == "right" + base { return (modifier.carbon, .right) }
+        }
+        return nil
     }
 
     private static func normalizeName(_ name: String) -> String {

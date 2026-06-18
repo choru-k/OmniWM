@@ -15,6 +15,7 @@ struct HotkeyPlannedRegistration: Equatable {
 enum HotkeyRegistrationFailureReason: Equatable {
     case duplicateBinding
     case systemReserved
+    case requiresInputMonitoring
 }
 
 enum SystemHyperTriggerFailure: Equatable {
@@ -24,7 +25,18 @@ enum SystemHyperTriggerFailure: Equatable {
 
 struct HotkeyRegistrationPlan: Equatable {
     let registrations: [HotkeyPlannedRegistration]
+    let sideSpecificRegistrations: [HotkeyPlannedRegistration]
     var failures: [HotkeyCommand: HotkeyRegistrationFailureReason]
+
+    init(
+        registrations: [HotkeyPlannedRegistration],
+        sideSpecificRegistrations: [HotkeyPlannedRegistration] = [],
+        failures: [HotkeyCommand: HotkeyRegistrationFailureReason]
+    ) {
+        self.registrations = registrations
+        self.sideSpecificRegistrations = sideSpecificRegistrations
+        self.failures = failures
+    }
 }
 
 struct HotkeyRuntimeConfiguration: Equatable {
@@ -189,6 +201,8 @@ final class HotkeyCenter {
     private var idToCommand: [UInt32: HotkeyCommand] = [:]
 
     private var configuration = HotkeyRuntimeConfiguration()
+    private var sideSpecificDispatch: [CommandHotkeyTapMatcher.Entry] = []
+    private var suppressedHotkeyKeyCodes: Set<UInt32> = []
     private var hyperTriggerTap: CFMachPort?
     private var hyperTriggerRunLoopSource: CFRunLoopSource?
     private var hyperTrigger = HyperTriggerStateMachine(trigger: .none, capsLockRemapped: false)
@@ -242,7 +256,6 @@ final class HotkeyCenter {
         let selfPtr = Unmanaged.passUnretained(self).toOpaque()
         InstallEventHandler(GetApplicationEventTarget(), callback, 1, &eventSpec, selfPtr, &handler)
 
-        reconcileSystemHyperTrigger()
         refreshCommandHotkeyRegistrations()
     }
 
@@ -278,7 +291,6 @@ final class HotkeyCenter {
         guard force || nextConfiguration != configuration else { return }
         configuration = nextConfiguration
         if isRunning {
-            reconcileSystemHyperTrigger()
             refreshCommandHotkeyRegistrations()
         }
     }
@@ -291,18 +303,45 @@ final class HotkeyCenter {
         idToCommand.removeAll()
     }
 
-    private func reconcileSystemHyperTrigger() {
+    private func reconcileEventTap() {
         stopHyperTriggerTap()
         restoreCapsLockHyperRemap()
         systemHyperTriggerFailure = nil
-        setupSystemHyperTriggerIfNeeded()
+        hyperTrigger = HyperTriggerStateMachine(trigger: .none, capsLockRemapped: false)
+
+        let hyperEnabled = configuration.systemHyperTrigger.isEnabled
+        guard hyperEnabled || !sideSpecificDispatch.isEmpty else { return }
+
+        if hyperEnabled {
+            if activateCapsLockHyperRemapIfNeeded() {
+                hyperTrigger = HyperTriggerStateMachine(
+                    trigger: configuration.systemHyperTrigger,
+                    capsLockRemapped: capsLockHyperRemapActive
+                )
+            } else {
+                systemHyperTriggerFailure = .capsLockRemapUnavailable
+            }
+        }
+
+        if !setupHyperTriggerTapIfNeeded() {
+            if hyperEnabled {
+                systemHyperTriggerFailure = .eventTapUnavailable
+            }
+            restoreCapsLockHyperRemap()
+            hyperTrigger = HyperTriggerStateMachine(trigger: .none, capsLockRemapped: false)
+        }
     }
 
     private func refreshCommandHotkeyRegistrations() {
         unregisterCommandHotkeys()
         let plan = Self.registrationPlan(for: configuration.bindings)
         registrationFailures = plan.failures
-        guard !commandHotkeysSuspended else { return }
+
+        guard !commandHotkeysSuspended else {
+            sideSpecificDispatch = []
+            reconcileEventTap()
+            return
+        }
 
         var nextId: UInt32 = 1
         for registration in plan.registrations {
@@ -327,29 +366,22 @@ final class HotkeyCenter {
             }
             nextId += 1
         }
+
+        sideSpecificDispatch = plan.sideSpecificRegistrations.map {
+            CommandHotkeyTapMatcher.Entry(binding: $0.binding, command: $0.command)
+        }
+        reconcileEventTap()
+        if !sideSpecificDispatch.isEmpty, hyperTriggerTap == nil {
+            for entry in sideSpecificDispatch {
+                registrationFailures[entry.command] = .requiresInputMonitoring
+            }
+            sideSpecificDispatch = []
+        }
     }
 
     private func dispatch(id: UInt32) {
         guard let command = idToCommand[id] else { return }
         onCommand?(command)
-    }
-
-    private func setupSystemHyperTriggerIfNeeded() {
-        hyperTrigger = HyperTriggerStateMachine(trigger: .none, capsLockRemapped: false)
-        guard configuration.systemHyperTrigger.isEnabled else { return }
-        if !activateCapsLockHyperRemapIfNeeded() {
-            systemHyperTriggerFailure = .capsLockRemapUnavailable
-            return
-        }
-        hyperTrigger = HyperTriggerStateMachine(
-            trigger: configuration.systemHyperTrigger,
-            capsLockRemapped: capsLockHyperRemapActive
-        )
-        if !setupHyperTriggerTapIfNeeded() {
-            systemHyperTriggerFailure = .eventTapUnavailable
-            restoreCapsLockHyperRemap()
-            hyperTrigger = HyperTriggerStateMachine(trigger: .none, capsLockRemapped: false)
-        }
     }
 
     private func activateCapsLockHyperRemapIfNeeded() -> Bool {
@@ -403,6 +435,7 @@ final class HotkeyCenter {
 
     private func stopHyperTriggerTap() {
         hyperTrigger.reset()
+        suppressedHotkeyKeyCodes.removeAll()
         if let source = hyperTriggerRunLoopSource {
             CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .commonModes)
             hyperTriggerRunLoopSource = nil
@@ -420,9 +453,11 @@ final class HotkeyCenter {
                 CGEvent.tapEnable(tap: tap, enable: true)
             }
             hyperTrigger.reset()
+            suppressedHotkeyKeyCodes.removeAll()
             return Unmanaged.passUnretained(event)
         case .tapDisabledByUserInput:
             hyperTrigger.reset()
+            suppressedHotkeyKeyCodes.removeAll()
             return Unmanaged.passUnretained(event)
         case .keyDown,
              .keyUp:
@@ -442,11 +477,36 @@ final class HotkeyCenter {
         let timestamp = TimeInterval(event.timestamp) / 1_000_000_000
         switch type {
         case .keyDown:
-            return applyHyperTriggerDecision(
-                hyperTrigger.handleKeyDown(keyCode, timestamp: timestamp),
-                to: event
-            )
+            switch hyperTrigger.handleKeyDown(keyCode, timestamp: timestamp) {
+            case .suppress:
+                return nil
+            case .toggleCapsLock:
+                capsLockToggler.toggle()
+                return nil
+            case .inject:
+                injectHyperFlags(into: event)
+            case .passThrough:
+                break
+            }
+            if suppressedHotkeyKeyCodes.contains(keyCode) {
+                return nil
+            }
+            if event.getIntegerValueField(.keyboardEventAutorepeat) == 0,
+               let command = CommandHotkeyTapMatcher.match(
+                   keyCode: keyCode,
+                   rawFlags: event.flags.rawValue,
+                   entries: sideSpecificDispatch
+               )
+            {
+                suppressedHotkeyKeyCodes.insert(keyCode)
+                onCommand?(command)
+                return nil
+            }
+            return Unmanaged.passUnretained(event)
         case .keyUp:
+            if suppressedHotkeyKeyCodes.remove(keyCode) != nil {
+                return nil
+            }
             return applyHyperTriggerDecision(
                 hyperTrigger.handleKeyUp(keyCode, timestamp: timestamp),
                 to: event
@@ -508,27 +568,34 @@ final class HotkeyCenter {
     }
 
     nonisolated static func registrationPlan(for bindings: [HotkeyBinding]) -> HotkeyRegistrationPlan {
-        var owners: [KeyBinding: [HotkeyCommand]] = [:]
         var candidates: [(command: HotkeyCommand, binding: KeyBinding)] = []
-        var failures: [HotkeyCommand: HotkeyRegistrationFailureReason] = [:]
-
         for binding in bindings {
             guard case let .chord(keyBinding) = binding.binding, !keyBinding.isUnassigned else { continue }
-            owners[keyBinding, default: []].append(binding.command)
             candidates.append((binding.command, keyBinding))
         }
 
-        for commands in owners.values where commands.count > 1 {
-            for command in commands where failures[command] == nil {
-                failures[command] = .duplicateBinding
+        var failures: [HotkeyCommand: HotkeyRegistrationFailureReason] = [:]
+        for index in candidates.indices {
+            let overlaps = candidates.indices.contains { other in
+                other != index && candidates[index].binding.conflicts(with: candidates[other].binding)
+            }
+            if overlaps {
+                failures[candidates[index].command] = .duplicateBinding
             }
         }
 
-        let registrations = candidates
-            .filter { failures[$0.command] == nil }
+        let registrable = candidates.filter { failures[$0.command] == nil }
+        let registrations = registrable
+            .filter { $0.binding.sidedModifiers.isEmpty }
+            .map { HotkeyPlannedRegistration(binding: $0.binding, command: $0.command) }
+        let sideSpecific = registrable
+            .filter { !$0.binding.sidedModifiers.isEmpty }
             .map { HotkeyPlannedRegistration(binding: $0.binding, command: $0.command) }
 
-        return HotkeyRegistrationPlan(registrations: registrations, failures: failures)
+        return HotkeyRegistrationPlan(
+            registrations: registrations,
+            sideSpecificRegistrations: sideSpecific,
+            failures: failures
+        )
     }
-
 }

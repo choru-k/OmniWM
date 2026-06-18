@@ -386,4 +386,146 @@ final class HotkeyChordTests: XCTestCase {
         XCTAssertFalse(toml.contains("leaderKey"))
         XCTAssertFalse(toml.contains("sequenceTimeoutMilliseconds"))
     }
+
+    func testKeyBindingConflictTreatsLeftAndRightAsDistinct() {
+        let either = KeyBinding(keyCode: UInt32(kVK_ANSI_1), modifiers: UInt32(optionKey))
+        let left = either.settingSide(.left)
+        let right = either.settingSide(.right)
+
+        XCTAssertFalse(left.conflicts(with: right))
+        XCTAssertFalse(right.conflicts(with: left))
+        XCTAssertTrue(left.conflicts(with: left))
+        XCTAssertTrue(either.conflicts(with: left))
+        XCTAssertTrue(either.conflicts(with: right))
+        XCTAssertTrue(left.conflicts(with: either))
+    }
+
+    func testSideQualifiedModifierRoundTrips() {
+        let right = KeyBinding(keyCode: UInt32(kVK_ANSI_1), modifiers: UInt32(optionKey)).settingSide(.right)
+
+        XCTAssertEqual(right.humanReadableString, "Right Option+1")
+        XCTAssertEqual(right.displayString, "R⌥1")
+        XCTAssertEqual(KeySymbolMapper.fromHumanReadable("Right Option+1"), right)
+        XCTAssertEqual(KeySymbolMapper.fromHumanReadable("RightOption+1"), right)
+
+        let either = KeyBinding(keyCode: UInt32(kVK_ANSI_1), modifiers: UInt32(optionKey))
+        XCTAssertEqual(either.humanReadableString, "Option+1")
+        XCTAssertEqual(KeySymbolMapper.fromHumanReadable("Option+1"), either)
+    }
+
+    func testMixedSideModifierRoundTrips() {
+        let binding = KeyBinding(
+            keyCode: UInt32(kVK_ANSI_A),
+            modifiers: UInt32(optionKey | shiftKey),
+            sidedModifiers: SidedModifiers(left: UInt32(shiftKey), right: UInt32(optionKey))
+        )
+
+        XCTAssertEqual(binding.humanReadableString, "Right Option+Left Shift+A")
+        XCTAssertEqual(KeySymbolMapper.fromHumanReadable("Right Option+Left Shift+A"), binding)
+    }
+
+    func testRegistrationPlanPartitionsSideSpecificBindings() {
+        let either = KeyBinding(keyCode: UInt32(kVK_ANSI_A), modifiers: UInt32(optionKey))
+        let leftOnly = KeyBinding(keyCode: UInt32(kVK_ANSI_B), modifiers: UInt32(optionKey)).settingSide(.left)
+        let bindings = [
+            HotkeyBinding(id: "focus.left", command: .focus(.left), binding: either),
+            HotkeyBinding(id: "focus.right", command: .focus(.right), binding: leftOnly)
+        ]
+
+        let plan = HotkeyCenter.registrationPlan(for: bindings)
+
+        XCTAssertEqual(plan.registrations.map(\.command), [.focus(.left)])
+        XCTAssertEqual(plan.sideSpecificRegistrations.map(\.command), [.focus(.right)])
+        XCTAssertTrue(plan.failures.isEmpty)
+    }
+
+    func testRegistrationPlanMarksOverlappingSideBindingsDuplicate() {
+        let either = KeyBinding(keyCode: UInt32(kVK_ANSI_A), modifiers: UInt32(optionKey))
+        let left = either.settingSide(.left)
+        let bindings = [
+            HotkeyBinding(id: "focus.left", command: .focus(.left), binding: either),
+            HotkeyBinding(id: "focus.right", command: .focus(.right), binding: left)
+        ]
+
+        let plan = HotkeyCenter.registrationPlan(for: bindings)
+
+        XCTAssertEqual(plan.failures[.focus(.left)], .duplicateBinding)
+        XCTAssertEqual(plan.failures[.focus(.right)], .duplicateBinding)
+    }
+
+    func testCommandHotkeyTapMatcherRespectsModifierSide() {
+        let leftOption = KeyBinding(keyCode: UInt32(kVK_ANSI_1), modifiers: UInt32(optionKey)).settingSide(.left)
+        let entries = [CommandHotkeyTapMatcher.Entry(binding: leftOption, command: .switchWorkspace(0))]
+        let leftFlags = CGEventFlags.maskAlternate.rawValue | UInt64(NX_DEVICELALTKEYMASK)
+        let rightFlags = CGEventFlags.maskAlternate.rawValue | UInt64(NX_DEVICERALTKEYMASK)
+
+        XCTAssertEqual(
+            CommandHotkeyTapMatcher.match(keyCode: UInt32(kVK_ANSI_1), rawFlags: leftFlags, entries: entries),
+            .switchWorkspace(0)
+        )
+        XCTAssertNil(CommandHotkeyTapMatcher.match(keyCode: UInt32(kVK_ANSI_1), rawFlags: rightFlags, entries: entries))
+        XCTAssertNil(CommandHotkeyTapMatcher.match(keyCode: UInt32(kVK_ANSI_2), rawFlags: leftFlags, entries: entries))
+    }
+
+    func testCommandHotkeyTapMatcherEitherSideMatchesBothSides() {
+        let eitherOption = KeyBinding(keyCode: UInt32(kVK_ANSI_1), modifiers: UInt32(optionKey))
+        let entries = [CommandHotkeyTapMatcher.Entry(binding: eitherOption, command: .focusPrevious)]
+        let leftFlags = CGEventFlags.maskAlternate.rawValue | UInt64(NX_DEVICELALTKEYMASK)
+        let rightFlags = CGEventFlags.maskAlternate.rawValue | UInt64(NX_DEVICERALTKEYMASK)
+
+        XCTAssertEqual(
+            CommandHotkeyTapMatcher.match(keyCode: UInt32(kVK_ANSI_1), rawFlags: leftFlags, entries: entries),
+            .focusPrevious
+        )
+        XCTAssertEqual(
+            CommandHotkeyTapMatcher.match(keyCode: UInt32(kVK_ANSI_1), rawFlags: rightFlags, entries: entries),
+            .focusPrevious
+        )
+    }
+
+    func testCommandHotkeyTapMatcherRejectsExtraModifiers() {
+        let leftOption = KeyBinding(keyCode: UInt32(kVK_ANSI_1), modifiers: UInt32(optionKey)).settingSide(.left)
+        let entries = [CommandHotkeyTapMatcher.Entry(binding: leftOption, command: .switchWorkspace(0))]
+        let leftOptionWithShift = CGEventFlags.maskAlternate.rawValue
+            | UInt64(NX_DEVICELALTKEYMASK)
+            | CGEventFlags.maskShift.rawValue
+            | UInt64(NX_DEVICELSHIFTKEYMASK)
+
+        XCTAssertNil(
+            CommandHotkeyTapMatcher.match(keyCode: UInt32(kVK_ANSI_1), rawFlags: leftOptionWithShift, entries: entries)
+        )
+    }
+
+    func testSettingSidePinsAndClearsUniformly() {
+        let base = KeyBinding(keyCode: UInt32(kVK_ANSI_A), modifiers: UInt32(optionKey | shiftKey))
+
+        let right = base.settingSide(.right)
+        XCTAssertEqual(right.side, .right)
+        XCTAssertEqual(right.sidedModifiers.right, UInt32(optionKey | shiftKey))
+        XCTAssertEqual(right.sidedModifiers.left, 0)
+
+        let backToEither = right.settingSide(.either)
+        XCTAssertEqual(backToEither.side, .either)
+        XCTAssertTrue(backToEither.sidedModifiers.isEmpty)
+
+        let bare = KeyBinding(keyCode: UInt32(kVK_F13), modifiers: 0)
+        XCTAssertEqual(bare.settingSide(.right).side, .either)
+    }
+
+    func testSideSurvivesKeyedCodableFallbackForUnmappedKey() throws {
+        let unmappedKeyCode: UInt32 = 9999
+        XCTAssertEqual(KeySymbolMapper.keyName(unmappedKeyCode), "?")
+
+        let binding = KeyBinding(
+            keyCode: unmappedKeyCode,
+            modifiers: UInt32(optionKey),
+            sidedModifiers: SidedModifiers(right: UInt32(optionKey))
+        )
+
+        let data = try JSONEncoder().encode(binding)
+        let decoded = try JSONDecoder().decode(KeyBinding.self, from: data)
+
+        XCTAssertEqual(decoded, binding)
+        XCTAssertEqual(decoded.side, .right)
+    }
 }

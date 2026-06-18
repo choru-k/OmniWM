@@ -94,10 +94,7 @@ enum HotkeySettingsDisplayModel {
     }
 
     static func displayString(for binding: KeyBinding) -> String {
-        if binding.isUnassigned {
-            return "Unassigned"
-        }
-        return KeySymbolMapper.displayString(keyCode: binding.keyCode, modifiers: binding.modifiers)
+        binding.displayString
     }
 
     static func displayString(for trigger: HotkeyTrigger) -> String {
@@ -110,13 +107,7 @@ enum HotkeySettingsDisplayModel {
     }
 
     static func humanReadableString(for binding: KeyBinding) -> String {
-        if binding.isUnassigned {
-            return "Unassigned"
-        }
-        return KeySymbolMapper.humanReadableString(
-            keyCode: binding.keyCode,
-            modifiers: binding.modifiers
-        )
+        binding.humanReadableString
     }
 
     static func humanReadableString(for trigger: HotkeyTrigger) -> String {
@@ -245,7 +236,8 @@ struct HotkeySettingsView: View {
                                 onChordCaptured: handleChordCaptured,
                                 onCancelRecording: cancelRecording,
                                 onClearBinding: clearBinding,
-                                onResetBindings: resetBindings
+                                onResetBindings: resetBindings,
+                                onSetSide: setSide
                             )
                         }
                     }
@@ -332,10 +324,13 @@ struct HotkeySettingsView: View {
     }
 
     private func handleChordCaptured(actionId: String, newBinding: KeyBinding) {
-        handleTriggerCaptured(
-            actionId: actionId,
-            newTrigger: newBinding.isUnassigned ? .unassigned : .chord(newBinding)
-        )
+        guard !newBinding.isUnassigned else {
+            handleTriggerCaptured(actionId: actionId, newTrigger: .unassigned)
+            return
+        }
+        let previousSide = settings.hotkeyBindings
+            .first { $0.id == actionId }?.binding.chordBinding?.side ?? .either
+        handleTriggerCaptured(actionId: actionId, newTrigger: .chord(newBinding.settingSide(previousSide)))
     }
 
     private func handleTriggerCaptured(actionId: String, newTrigger: HotkeyTrigger) {
@@ -359,6 +354,13 @@ struct HotkeySettingsView: View {
         settings.resetBindings(for: actionId)
         controller.updateHotkeyBindings(settings.hotkeyBindings)
         cancelRecording()
+    }
+
+    private func setSide(actionId: String, side: ModifierSide) {
+        guard let binding = settings.hotkeyBindings.first(where: { $0.id == actionId }),
+              let chord = binding.binding.chordBinding
+        else { return }
+        handleTriggerCaptured(actionId: actionId, newTrigger: .chord(chord.settingSide(side)))
     }
 
     private func cancelRecording() {
@@ -423,6 +425,7 @@ private struct HotkeyBindingRow: View {
     let onCancelRecording: () -> Void
     let onClearBinding: (String) -> Void
     let onResetBindings: (String) -> Void
+    let onSetSide: (String, ModifierSide) -> Void
 
     var body: some View {
         LabeledContent {
@@ -452,6 +455,9 @@ private struct HotkeyBindingRow: View {
                     },
                     onRemove: {
                         onClearBinding(binding.id)
+                    },
+                    onSetSide: { side in
+                        onSetSide(binding.id, side)
                     }
                 )
 
@@ -497,6 +503,8 @@ private struct HotkeyBindingRow: View {
             return "Failed to register: this key combination is already assigned to another OmniWM command"
         case .systemReserved:
             return "Failed to register: this key combination may be reserved by the system"
+        case .requiresInputMonitoring:
+            return "Left/Right-specific shortcuts need Input Monitoring permission to work"
         }
     }
 }
@@ -523,6 +531,7 @@ private struct HotkeyBindingControl: View {
     let onCaptured: (KeyBinding) -> Void
     let onCancel: () -> Void
     let onRemove: () -> Void
+    let onSetSide: (ModifierSide) -> Void
 
     var body: some View {
         HStack(spacing: 8) {
@@ -562,7 +571,32 @@ private struct HotkeyBindingControl: View {
                     .help("Clear this hotkey")
                     .accessibilityLabel("Clear hotkey for \(commandName)")
                 }
+
+                if let chord = binding.chordBinding, chord.modifiers != 0 {
+                    Picker(
+                        "Modifier side",
+                        selection: Binding(get: { chord.side }, set: { onSetSide($0) })
+                    ) {
+                        Text("Either").tag(ModifierSide.either)
+                        Text("Left").tag(ModifierSide.left)
+                        Text("Right").tag(ModifierSide.right)
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                    .fixedSize()
+                    .help("Restrict this shortcut to the left or right side of its modifier keys")
+                    .accessibilityLabel("Modifier side for \(commandName)")
+                    .accessibilityValue(sideAccessibilityValue(chord.side))
+                }
             }
+        }
+    }
+
+    private func sideAccessibilityValue(_ side: ModifierSide) -> String {
+        switch side {
+        case .either: "Either side"
+        case .left: "Left side"
+        case .right: "Right side"
         }
     }
 
