@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 
 /// Loads (and seeds) the leader tree from `~/.config/omniwm/leader.json`.
@@ -26,6 +27,12 @@ enum LeaderConfigStore {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         let data = try encoder.encode(config)
-        try data.write(to: fileURL(paths: paths), options: .atomic)
+        try data.writePreservingSymlink(to: fileURL(paths: paths))
+    }
+
+    /// Reveal leader.json in Finder, seeding it first so the file always exists.
+    @MainActor static func revealInFinder(paths: OmniWMStoragePaths = .live) {
+        _ = loadOrSeed(paths: paths)
+        NSWorkspace.shared.activateFileViewerSelecting([fileURL(paths: paths)])
     }
 }

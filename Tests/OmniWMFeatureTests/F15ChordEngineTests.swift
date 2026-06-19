@@ -75,4 +75,19 @@ import Testing
         let result = engine.handle(type: .keyDown, keyCode: hKey, isRepeat: false, modifiers: 0, now: 1.0)
         #expect(result == .ignored)
     }
+
+    @Test func customLeaderKeyDrivesChordsAndF15DoesNot() {
+        let f16 = UInt32(kVK_F16)
+        let engine = F15ChordEngine()
+        engine.configure(enabled: true, doubleTapSeconds: 0.3, leaderKeyCode: f16)
+        // F16 now acts as the leader: hold it, then a chord key runs the command.
+        _ = engine.handle(type: .keyDown, keyCode: f16, isRepeat: false, modifiers: 0, now: 1.0)
+        let held = engine.handle(type: .keyDown, keyCode: hKey, isRepeat: false, modifiers: 0, now: 1.1)
+        #expect(held == .init(action: .command(.focus(.left)), shouldSwallow: true))
+        _ = engine.handle(type: .keyUp, keyCode: f16, isRepeat: false, modifiers: 0, now: 1.2) // release leader
+        // The old F15 key is just a normal key now — holding it captures nothing.
+        _ = engine.handle(type: .keyDown, keyCode: f15, isRepeat: false, modifiers: 0, now: 2.0)
+        let afterF15 = engine.handle(type: .keyDown, keyCode: hKey, isRepeat: false, modifiers: 0, now: 2.1)
+        #expect(afterF15 == .ignored)
+    }
 }

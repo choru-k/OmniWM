@@ -4,10 +4,14 @@ Features ported onto upstream `BarutSRB/OmniWM` from the earlier `guria/nehir` f
 **off by default** — upstream behavior is unchanged until you opt in.
 
 - [Zones](zones.md) — named "anchor" regions in the single Niri column strip; jump to / send windows to a zone.
-- [Leader](leader.md) — a configurable, vim-style single-key menu tree, shown as a Command Palette tab (⌘4).
-- [F15 chord layer](f15.md) — hold-F15 + key runs commands (editable in `f15.json`); double-tap opens the Leader tab; includes tabbed-column toggle + wrap-around tab cycling.
+- [Leader](leader.md) — a configurable, vim-style single-key menu tree (Command Palette tab, ⌘4). Items open an app (bundle id or path), run a shell script, run an action, or open a submenu, each with an optional emoji / SF-Symbol icon. Edited via an in-app inline-tree editor.
+- [F15 chord layer](f15.md) — hold the leader key + key runs commands; double-tap opens the Leader tab; tabbed-column toggle + wrap-around tab cycling. The leader key is **configurable** (F13–F20, default F15) and everything is editable in **Settings → Input → Leader (F15)** or `f15.json`.
 - [Mouse resize](mouse.md) — resize with left-button + modifier drag (trackpad-friendly), not just right-button.
 - [Building & running this fork](build.md) — toolchain, the GhosttyKit stub, the macOS-15 SDK shims, packaging, permissions.
+
+Most of this is editable in the **Settings → Input → Leader (F15)** tab (enable, leader key, timing,
+hold-chords, and the full leader menu tree) — the files below are written by that UI, or you can edit
+them directly.
 
 ## Quick enable
 `~/.config/omniwm/settings.toml`:
@@ -16,6 +20,7 @@ Features ported onto upstream `BarutSRB/OmniWM` from the earlier `guria/nehir` f
 f15Enabled = true
 zonesEnabled = true
 # f15DoubleTapSeconds = 0.3   # optional
+# f15LeaderKeyCode = 113      # optional; leader key (kVK_F15 default, e.g. F16 = 106)
 ```
 Structured custom-feature config lives in its own JSON file (seeded on first run):
 - `~/.config/omniwm/leader.json` — the leader tree.

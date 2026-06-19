@@ -1,20 +1,35 @@
 import Foundation
 
 /// One entry in a leader menu: a single key that either descends into a folder (`menu`),
-/// activates an app (`app` = bundle id), or runs an ActionCatalog action (`action` = action id).
+/// opens an app (`app` = bundle id *or* a file path to a .app), runs a shell command
+/// (`script`), or runs an ActionCatalog action (`action` = action id).
+/// `icon` is an optional custom glyph: an emoji, or `sf:symbol.name` for an SF Symbol;
+/// when nil the UI auto-derives one (app icon / folder / action glyph).
 struct LeaderMenuItem: Codable, Equatable {
     var key: String
     var title: String
     var menu: String?
     var app: String?
+    var script: String?
     var action: String?
+    var icon: String?
 
-    init(key: String, title: String, menu: String? = nil, app: String? = nil, action: String? = nil) {
+    init(
+        key: String,
+        title: String,
+        menu: String? = nil,
+        app: String? = nil,
+        script: String? = nil,
+        action: String? = nil,
+        icon: String? = nil
+    ) {
         self.key = key
         self.title = title
         self.menu = menu
         self.app = app
+        self.script = script
         self.action = action
+        self.icon = icon
     }
 }
 

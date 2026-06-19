@@ -968,17 +968,37 @@ final class CommandPaletteController: NSObject, ObservableObject, NSWindowDelega
             _ = wmController?.commandHandler.handleCommand(command)
             return
         }
-        if let bundleID = item.app {
-            activateApp(bundleID: bundleID)
+        if let script = item.script, !script.trimmingCharacters(in: .whitespaces).isEmpty {
+            Self.runScript(script)
+            return
+        }
+        if let app = item.app, !app.isEmpty {
+            activateApp(app)
         }
     }
 
-    private func activateApp(bundleID: String) {
+    /// `target` is either a bundle id (e.g. `com.apple.Safari`) or a file path to a .app.
+    private func activateApp(_ target: String) {
         let workspace = NSWorkspace.shared
-        if let app = workspace.runningApplications.first(where: { $0.bundleIdentifier == bundleID }) {
-            app.activate(options: [])
-        } else if let url = workspace.urlForApplication(withBundleIdentifier: bundleID) {
+        if target.hasPrefix("/") || target.hasSuffix(".app") {
+            let url = URL(fileURLWithPath: target)
             workspace.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration())
+        } else if let app = workspace.runningApplications.first(where: { $0.bundleIdentifier == target }) {
+            app.activate(options: [])
+        } else if let url = workspace.urlForApplication(withBundleIdentifier: target) {
+            workspace.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration())
+        }
+    }
+
+    /// Fire-and-forget a shell command (the config is user-owned, same trust as the JSON file).
+    private static func runScript(_ command: String) {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/zsh")
+        process.arguments = ["-lc", command]
+        do {
+            try process.run()
+        } catch {
+            NSLog("OmniWM leader script failed to launch: \(error.localizedDescription)")
         }
     }
 
@@ -1743,6 +1763,8 @@ private struct CommandPaletteLeaderRow: View {
         HStack(spacing: 12) {
             CommandPaletteShortcutBadge(text: item.key)
                 .frame(minWidth: 28)
+
+            LeaderIconView(item: item, size: 18)
 
             Text(item.title)
                 .font(.system(size: 14, weight: .medium))

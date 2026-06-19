@@ -44,6 +44,7 @@ struct CanonicalTOMLConfig: Codable, Equatable {
         // Fork additions (off by default): F15 chord layer + Zones anchor model.
         var f15Enabled: Bool
         var f15DoubleTapSeconds: Double
+        var f15LeaderKeyCode: Int
         var zonesEnabled: Bool
     }
 
@@ -441,6 +442,12 @@ extension CanonicalTOMLConfig.General {
             Double.self,
             forKey: .f15DoubleTapSeconds,
             default: defaults.f15DoubleTapSeconds,
+            recovering: recovering
+        )
+        f15LeaderKeyCode = try container.decode(
+            Int.self,
+            forKey: .f15LeaderKeyCode,
+            default: defaults.f15LeaderKeyCode,
             recovering: recovering
         )
         zonesEnabled = try container.decode(
@@ -914,6 +921,7 @@ extension CanonicalTOMLConfig {
             animationsEnabled: export.animationsEnabled,
             f15Enabled: export.f15Enabled,
             f15DoubleTapSeconds: export.f15DoubleTapSeconds,
+            f15LeaderKeyCode: export.f15LeaderKeyCode,
             zonesEnabled: export.zonesEnabled
         )
         focus = Focus(
@@ -1116,6 +1124,7 @@ extension CanonicalTOMLConfig {
             appearanceMode: appearance.mode,
             f15Enabled: general.f15Enabled,
             f15DoubleTapSeconds: general.f15DoubleTapSeconds,
+            f15LeaderKeyCode: general.f15LeaderKeyCode,
             zonesEnabled: general.zonesEnabled
         )
     }

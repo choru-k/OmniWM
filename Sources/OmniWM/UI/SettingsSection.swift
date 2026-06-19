@@ -13,6 +13,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
     case borders
     case bar
     case hotkeys
+    case leader
     case quakeTerminal
     case reportIssue
 
@@ -31,6 +32,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .borders: "Borders"
         case .bar: "Workspace Bar"
         case .hotkeys: "Hotkeys"
+        case .leader: "Leader (F15)"
         case .quakeTerminal: "Quake Terminal"
         case .reportIssue: "Report an Issue"
         }
@@ -47,6 +49,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .borders: "square.dashed"
         case .bar: "menubar.rectangle"
         case .hotkeys: "keyboard"
+        case .leader: "command"
         case .quakeTerminal: "terminal"
         case .reportIssue: "ladybug"
         }
@@ -73,7 +76,7 @@ enum SettingsSectionGroup: String, CaseIterable, Identifiable {
         case .workspace:
             [.workspaces, .borders, .bar]
         case .input:
-            [.hotkeys, .quakeTerminal]
+            [.hotkeys, .leader, .quakeTerminal]
         case .help:
             [.reportIssue, .diagnostics]
         }

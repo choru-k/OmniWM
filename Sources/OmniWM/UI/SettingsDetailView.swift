@@ -43,6 +43,8 @@ struct SettingsDetailView: View {
             WorkspaceBarSettingsTab(settings: settings, controller: controller)
         case .hotkeys:
             HotkeySettingsView(settings: settings, controller: controller)
+        case .leader:
+            LeaderSettingsView(settings: settings, controller: controller)
         case .quakeTerminal:
             QuakeTerminalSettingsTab(settings: settings, controller: controller)
         case .reportIssue:

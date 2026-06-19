@@ -128,7 +128,7 @@ final class SettingsFilePersistence {
 
         let previous = FileManager.default.fileExists(atPath: fileURL.path) ? try? Data(contentsOf: fileURL) : nil
         let data = try SettingsTOMLCodec.encode(export, preservingUnknownKeysFrom: previous)
-        try data.write(to: fileURL, options: .atomic)
+        try data.writePreservingSymlink(to: fileURL)
 
         let fingerprint = currentFingerprint()
         lastWrittenFingerprint = fingerprint

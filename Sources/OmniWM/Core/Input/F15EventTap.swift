@@ -18,10 +18,11 @@ final class F15EventTap {
     func configure(
         enabled: Bool,
         doubleTapSeconds: Double,
+        leaderKeyCode: UInt32 = F15ChordEngine.defaultLeaderKeyCode,
         chords: [KeyBinding: HotkeyCommand] = F15ChordEngine.defaultChords
     ) {
         engine.setChords(chords)
-        engine.configure(enabled: enabled, doubleTapSeconds: doubleTapSeconds)
+        engine.configure(enabled: enabled, doubleTapSeconds: doubleTapSeconds, leaderKeyCode: leaderKeyCode)
         reinstall()
     }
 

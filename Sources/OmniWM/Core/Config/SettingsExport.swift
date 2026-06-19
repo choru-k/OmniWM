@@ -120,6 +120,7 @@ struct SettingsExport: Equatable {
     // Fork additions (off by default): F15 chord layer + Zones anchor model.
     var f15Enabled: Bool = false
     var f15DoubleTapSeconds: Double = 0.3
+    var f15LeaderKeyCode: Int = 113 // kVK_F15
     var zonesEnabled: Bool = false
 }
 

@@ -81,6 +81,6 @@ enum F15ConfigStore {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         let data = try encoder.encode(config)
-        try data.write(to: fileURL(paths: paths), options: .atomic)
+        try data.writePreservingSymlink(to: fileURL(paths: paths))
     }
 }

@@ -291,6 +291,10 @@ final class SettingsStore {
         didSet { scheduleSave() }
     }
 
+    var f15LeaderKeyCode = SettingsStore.defaultExport.f15LeaderKeyCode {
+        didSet { scheduleSave() }
+    }
+
     var zonesEnabled = SettingsStore.defaultExport.zonesEnabled {
         didSet { scheduleSave() }
     }
@@ -620,6 +624,7 @@ final class SettingsStore {
             capabilityOverrides: [],
             f15Enabled: f15Enabled,
             f15DoubleTapSeconds: f15DoubleTapSeconds,
+            f15LeaderKeyCode: f15LeaderKeyCode,
             zonesEnabled: zonesEnabled
         )
     }
@@ -716,6 +721,7 @@ final class SettingsStore {
         spacesTrackingEnabled = export.spacesTrackingEnabled
         f15Enabled = export.f15Enabled
         f15DoubleTapSeconds = export.f15DoubleTapSeconds
+        f15LeaderKeyCode = export.f15LeaderKeyCode
         zonesEnabled = export.zonesEnabled
         scrollGestureEnabled = export.scrollGestureEnabled
         scrollSensitivity = export.scrollSensitivity

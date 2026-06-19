@@ -59,10 +59,13 @@ final class F15ChordEngine {
     private var chords: [KeyBinding: HotkeyCommand] = F15ChordEngine.defaultChords
     private var hold = ActivityTrackedKeyHold(staleTimeout: 3.0)
     private var lastF15TapTime: TimeInterval?
+    /// The leader key itself (F15 by default; configurable so users can pick F16 etc.).
+    private var leaderKeyCode = F15ChordEngine.defaultLeaderKeyCode
 
-    func configure(enabled: Bool, doubleTapSeconds: Double) {
+    func configure(enabled: Bool, doubleTapSeconds: Double, leaderKeyCode: UInt32 = F15ChordEngine.defaultLeaderKeyCode) {
         isEnabled = enabled
         self.doubleTapSeconds = max(0.05, doubleTapSeconds)
+        self.leaderKeyCode = leaderKeyCode
         reset()
     }
 
@@ -86,7 +89,7 @@ final class F15ChordEngine {
     ) -> Result {
         switch type {
         case .keyDown:
-            if keyCode == Self.f15KeyCode {
+            if keyCode == leaderKeyCode {
                 return handleF15KeyDown(isRepeat: isRepeat, now: now)
             }
             guard hold.isActive(at: now) else { return .ignored }
@@ -101,7 +104,7 @@ final class F15ChordEngine {
             return Result(action: .command(command), shouldSwallow: true)
 
         case .keyUp:
-            if keyCode == Self.f15KeyCode {
+            if keyCode == leaderKeyCode {
                 hold.clear()
                 return .swallowed
             }
@@ -130,7 +133,7 @@ final class F15ChordEngine {
         return .swallowed
     }
 
-    private static let f15KeyCode = UInt32(kVK_F15)
+    static let defaultLeaderKeyCode = UInt32(kVK_F15)
 
     // Built-in defaults; overridable per-user via ~/.config/omniwm/f15.json (see F15Config).
     static let defaultChords: [KeyBinding: HotkeyCommand] = F15Config.defaults.resolvedChords()

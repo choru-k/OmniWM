@@ -320,14 +320,7 @@ final class WMController {
         zonesConfig.enabled = settings.zonesEnabled      // master on/off stays in settings.toml
         zoneEngine.configure(zonesConfig)
 
-        f15EventTap.onCommand = { [weak self] command in
-            _ = self?.commandHandler.handleCommand(command)
-        }
-        f15EventTap.configure(
-            enabled: settings.f15Enabled,
-            doubleTapSeconds: settings.f15DoubleTapSeconds,
-            chords: F15ConfigStore.loadOrSeed().resolvedChords() // hold-chord map from f15.json
-        )
+        reloadF15Config()
 
         if dwindleEngine == nil {
             enableDwindleLayout()
@@ -524,6 +517,20 @@ final class WMController {
 
     func reloadQuakeTerminalOpacity() {
         quakeTerminalController.reloadOpacityConfig()
+    }
+
+    /// (Re)wire the F15 hold-chord tap from current settings + f15.json. Called on launch and
+    /// whenever the Leader (F15) settings tab edits the enable toggle, timing, or chords.
+    func reloadF15Config() {
+        f15EventTap.onCommand = { [weak self] command in
+            _ = self?.commandHandler.handleCommand(command)
+        }
+        f15EventTap.configure(
+            enabled: settings.f15Enabled,
+            doubleTapSeconds: settings.f15DoubleTapSeconds,
+            leaderKeyCode: UInt32(settings.f15LeaderKeyCode),
+            chords: F15ConfigStore.loadOrSeed().resolvedChords() // hold-chord map from f15.json
+        )
     }
 
     func requestWorkspaceBarRefresh() {
