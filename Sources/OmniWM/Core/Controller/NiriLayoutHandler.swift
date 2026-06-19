@@ -201,12 +201,13 @@ import QuartzCore
 
     private func requestLayoutCommandRelayout(
         in workspaceId: WorkspaceDescriptor.ID,
-        postLayout: LayoutRefreshController.PostLayoutAction? = nil
+        postLayout: LayoutRefreshController.PostLayoutAction? = nil,
+        postLayoutDomains: InvalidationDomain = .layoutCommit
     ) {
         controller?.layoutRefreshController.requestLayoutCommandRelayout(
             affectedWorkspaceIds: [workspaceId],
             postLayout: postLayout,
-            postLayoutDomains: .layoutCommit
+            postLayoutDomains: postLayoutDomains
         )
     }
 
@@ -219,15 +220,28 @@ import QuartzCore
     }
 
     func focusSelectedWindowAndRequestRelayout(in workspaceId: WorkspaceDescriptor.ID) {
-        guard let controller else { return }
-        let viewportState = controller.workspaceManager.niriViewportState(for: workspaceId)
-        if let selectedNodeId = viewportState.selectedNodeId,
-           let selectedWindow = controller.niriEngine?.findNode(by: selectedNodeId) as? NiriWindow,
-           controller.workspaceManager.entry(for: selectedWindow.token)?.workspaceId == workspaceId
-        {
-            controller.focusWindow(selectedWindow.token)
-        }
-        requestLayoutCommandRelayout(in: workspaceId)
+        requestLayoutCommandRelayout(
+            in: workspaceId,
+            postLayout: { [weak controller] in
+                guard let controller else {
+                    return
+                }
+                let viewportState = controller.workspaceManager.niriViewportState(for: workspaceId)
+                guard let selectedNodeId = viewportState.selectedNodeId,
+                      let selectedWindow = controller.niriEngine?.findNode(by: selectedNodeId) as? NiriWindow,
+                      controller.workspaceManager.entry(for: selectedWindow.token)?.workspaceId == workspaceId
+                else {
+                    return
+                }
+                controller.focusWindow(selectedWindow.token)
+            },
+            // Empty domains => never seq-invalidated, so this always runs after layout.
+            // The action re-reads the live selection and validates the workspace above, so it's
+            // safe to run regardless of churn. Gating it let unrelated bumps (a busy app's title
+            // updates via managed_replacement_metadata_changed, or focus_remembered fired during
+            // the same navigation) silently drop the focus — window scrolled in, focus never moved.
+            postLayoutDomains: []
+        )
     }
 
     func layoutWithNiriEngine(

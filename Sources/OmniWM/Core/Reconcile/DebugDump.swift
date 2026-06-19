@@ -30,26 +30,27 @@ enum ReconcileDebugDump {
             return "trace empty"
         }
 
-        return truncated.map { record in
-            var parts = [
-                "#\(record.sequence)",
-                record.timestamp.ISO8601Format(),
-                "event=\(record.event.summary)"
-            ]
-            if record.normalizedEvent != record.event {
-                parts.append("normalized=\(record.normalizedEvent.summary)")
-            }
-            if !record.plan.summary.isEmpty {
-                parts.append("plan=\(record.plan.summary)")
-            }
-            if !record.invariantViolations.isEmpty {
-                parts.append(
-                    "violations=\(record.invariantViolations.map(\.code).joined(separator: ","))"
-                )
-            }
-            return parts.joined(separator: " ")
+        return truncated.map(line).joined(separator: "\n")
+    }
+
+    static func line(_ record: ReconcileTraceRecord) -> String {
+        var parts = [
+            "#\(record.sequence)",
+            record.timestamp.ISO8601Format(),
+            "event=\(record.event.summary)"
+        ]
+        if record.normalizedEvent != record.event {
+            parts.append("normalized=\(record.normalizedEvent.summary)")
         }
-        .joined(separator: "\n")
+        if !record.plan.summary.isEmpty {
+            parts.append("plan=\(record.plan.summary)")
+        }
+        if !record.invariantViolations.isEmpty {
+            parts.append(
+                "violations=\(record.invariantViolations.map(\.code).joined(separator: ","))"
+            )
+        }
+        return parts.joined(separator: " ")
     }
 
     private static func describe(_ state: ObservedWindowState) -> String {

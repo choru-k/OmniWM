@@ -7,6 +7,7 @@ Features ported onto upstream `BarutSRB/OmniWM` from the earlier `guria/nehir` f
 - [Leader](leader.md) — a configurable, vim-style single-key menu tree (Command Palette tab, ⌘4). Items open an app (bundle id or path), run a shell script, run an action, or open a submenu, each with an optional emoji / SF-Symbol icon. Edited via an in-app inline-tree editor.
 - [F15 chord layer](f15.md) — hold the leader key + key runs commands; double-tap opens the Leader tab; tabbed-column toggle + wrap-around tab cycling. The leader key is **configurable** (F13–F20, default F15) and everything is editable in **Settings → Input → Leader (F15)** or `f15.json`.
 - [Mouse resize](mouse.md) — resize with left-button + modifier drag (trackpad-friendly), not just right-button.
+- [Debugging focus & reconcile issues](debugging.md) — live trace env vars, `omniwmctl` query/subscribe, the desync watcher, and a log of focus bugs already chased.
 - [Building & running this fork](build.md) — toolchain, the GhosttyKit stub, the macOS-15 SDK shims, packaging, permissions.
 
 Most of this is editable in the **Settings → Input → Leader (F15)** tab (enable, leader key, timing,

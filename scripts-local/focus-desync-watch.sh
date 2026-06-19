@@ -6,7 +6,8 @@ CTL=/opt/homebrew/bin/omniwmctl
 prev=""
 while true; do
   wm=$("$CTL" query focused-window 2>/dev/null | grep -m1 '"bundleId"' | sed -E 's/.*: "([^"]*)".*/\1/')
-  front=$(lsappinfo info -only bundleid "$(lsappinfo front 2>/dev/null)" 2>/dev/null | sed -E 's/.*=("?)([^"]*)\1$/\2/')
+  # lsappinfo prints: "CFBundleIdentifier"="com.foo.bar" — field 4 split on quotes is the id.
+  front=$(lsappinfo info -only bundleid "$(lsappinfo front 2>/dev/null)" 2>/dev/null | awk -F'"' '{print $4}')
   if [ -n "$wm" ] && [ -n "$front" ] && [ "$wm" != "$front" ]; then
     line="$(date '+%H:%M:%S')  DESYNC  wm-focus=$wm  macos-key=$front"
     if [ "$line ${line#*DESYNC}" != "$prev" ]; then

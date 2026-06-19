@@ -16,6 +16,10 @@ struct ReconcileTraceRecord: Equatable {
 @MainActor
 final class ReconcileTraceRecorder {
     private static let defaultLimit = 256
+    // OMNIWM_DEBUG_RECONCILE_TRACE=1 streams every reconcile record to stderr live
+    // (the queryable buffer is only the last `limit`). Run OmniWM from a terminal to see it.
+    private static let liveStreamEnabled =
+        ProcessInfo.processInfo.environment["OMNIWM_DEBUG_RECONCILE_TRACE"] == "1"
 
     private var nextSequence: UInt64 = 1
     private var records: RingBuffer<ReconcileTraceRecord>
@@ -43,6 +47,10 @@ final class ReconcileTraceRecorder {
         )
         nextSequence += 1
         records.append(record)
+
+        if Self.liveStreamEnabled {
+            fputs("[Reconcile] \(ReconcileDebugDump.line(record))\n", stderr)
+        }
     }
 
     func append(transaction: ReconcileTxn) {
