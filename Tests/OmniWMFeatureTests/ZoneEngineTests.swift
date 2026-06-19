@@ -22,48 +22,50 @@ import Testing
         return engine
     }
 
-    @Test func autoTagsAndPositionallyTagsUnknownWindows() {
+    @Test func untaggedWindowsGoToCurrentZone() {
+        // Current/active zone is 2; bundle-mapped apps keep their configured zones, and an app with
+        // no bundle assignment lands in the current zone (not inferred from neighbour position).
         var engine = ZoneEngine(
             config: ZonesConfig(
                 enabled: true,
-                definitions: [ZoneDefinition(id: 1, name: "one"), ZoneDefinition(id: 2, name: "two")],
-                bundleAssignments: ["app.two": 2, "app.one": 1]
-            )
+                definitions: [
+                    ZoneDefinition(id: 1, name: "one"),
+                    ZoneDefinition(id: 2, name: "two"),
+                    ZoneDefinition(id: 3, name: "three")
+                ],
+                bundleAssignments: ["app.one": 1, "app.three": 3]
+            ),
+            state: ZoneState(currentZone: 2)
         )
         let order = engine.reconciledOrder(
             windows: [
-                ZoneWindow(id: "b", bundleID: "app.two"),
                 ZoneWindow(id: "a", bundleID: "app.one"),
-                ZoneWindow(id: "c", bundleID: "app.unknown")
+                ZoneWindow(id: "x", bundleID: "app.unknown"),
+                ZoneWindow(id: "c", bundleID: "app.three")
             ],
-            orderedWindowIDs: ["b", "c", "a"]
+            orderedWindowIDs: ["a", "x", "c"]
         )
-        #expect(order == ["a", "b", "c"])
         #expect(engine.zoneID(forWindowID: "a") == 1)
-        #expect(engine.zoneID(forWindowID: "b") == 2)
-        #expect(engine.zoneID(forWindowID: "c") == 2)
-        #expect(engine.state.positionInferredWindowIDs == ["c"])
+        #expect(engine.zoneID(forWindowID: "x") == 2) // unmapped → current zone
+        #expect(engine.zoneID(forWindowID: "c") == 3)
+        #expect(order == ["a", "x", "c"]) // sorted by zone: 1, 2, 3
     }
 
-    @Test func positionallyTagsUnknownWindowsByNearestAnchor() {
+    @Test func untaggedWindowStaysStickyWhenCurrentZoneChanges() {
         var engine = ZoneEngine(
             config: ZonesConfig(
                 enabled: true,
                 definitions: [ZoneDefinition(id: 1, name: "one"), ZoneDefinition(id: 2, name: "two")],
-                bundleAssignments: ["app.one": 1, "app.two": 2]
-            )
+                bundleAssignments: [:]
+            ),
+            state: ZoneState(currentZone: 1)
         )
-        _ = engine.reconciledOrder(
-            windows: [
-                ZoneWindow(id: "a", bundleID: "app.one"),
-                ZoneWindow(id: "x", bundleID: "app.unknown"),
-                ZoneWindow(id: "y", bundleID: "app.unknown"),
-                ZoneWindow(id: "b", bundleID: "app.two")
-            ],
-            orderedWindowIDs: ["a", "x", "y", "b"]
-        )
+        _ = engine.reconciledOrder(windows: [ZoneWindow(id: "x", bundleID: "app.unknown")], orderedWindowIDs: ["x"])
         #expect(engine.zoneID(forWindowID: "x") == 1)
-        #expect(engine.zoneID(forWindowID: "y") == 2)
+        // Switch the active zone and reconcile again: the already-placed window stays put.
+        engine.setCurrentZone(2)
+        _ = engine.reconciledOrder(windows: [ZoneWindow(id: "x", bundleID: "app.unknown")], orderedWindowIDs: ["x"])
+        #expect(engine.zoneID(forWindowID: "x") == 1)
     }
 
     @Test func preservesOriginalOrderInsideZone() {

@@ -11,9 +11,11 @@ it; they're named jump targets that keep related apps grouped. (Ported from the 
 - **Auto-sort** — whenever windows change, the strip is re-ordered into zone order (1 → 6) so apps stay grouped. No-op when zones are disabled or already sorted; the focused window stays focused across the re-sort.
 
 ### Zone = initial placement, then sticky (independent of the app)
-A bundle assignment decides a window's zone **only the first time it's seen**. After that the tag is
-sticky: a manual `move-window-to-zone` persists, and reopening an app (a fresh window) lands it in
-its configured zone again. Tags are recomputed each session (not persisted across restart).
+A window's zone is decided **only the first time it's seen**: a `bundleAssignments` entry wins,
+otherwise it lands in the **current/active zone** (the one you're focused in when it opens). After
+that the tag is sticky: a manual `move-window-to-zone` persists, switching the active zone doesn't
+drag it along, and reopening an app (a fresh window) places it again. Tags are recomputed each
+session (not persisted across restart).
 
 ## Config: `~/.config/omniwm/zones.json`
 The app→zone map and zone names live here (seeded on first run); the on/off switch is in
