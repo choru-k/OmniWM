@@ -27,6 +27,10 @@ Structured custom-feature config lives in its own JSON file (seeded on first run
 - `~/.config/omniwm/zones.json` — the app→zone map (`bundleAssignments`) + zone names.
 - `~/.config/omniwm/f15.json` — the F15 hold-chord map (`key` → action id).
 
+**Symlink-friendly:** all four config files (incl. `settings.toml`) are written
+symlink-safe — the app resolves a symlink and writes onto its target, so dotfiles-managed
+configs (`~/.config/omniwm/leader.json` → your repo) keep their link and get updated in place.
+
 After enabling F15, grant **Input Monitoring** (System Settings → Privacy & Security → Input Monitoring);
 tiling needs **Accessibility** as usual.
 
