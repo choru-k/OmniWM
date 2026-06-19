@@ -22,7 +22,9 @@ struct DesiredSurfaceScene: Equatable {
     var placeholders: [NativeFullscreenPlaceholderUpdate] = []
     var bars: [DesiredBarSurface] = []
 
-    static let empty = DesiredSurfaceScene()
+    // ponytail: immutable constant; the macOS 15 SDK doesn't mark a nested member Sendable
+    // (the macOS 26 SDK does), so Swift 6 flags this static let. Safe to opt out — it never mutates.
+    nonisolated(unsafe) static let empty = DesiredSurfaceScene()
 }
 
 enum SurfaceDerivation {

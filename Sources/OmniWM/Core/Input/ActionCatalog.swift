@@ -504,6 +504,29 @@ enum ActionCatalog {
             )
         }
 
+        // Fork addition: Zones (1-based). Unbound by default; bindable as hotkeys and
+        // referenceable from the Leader tree as `focusZone.N` / `moveWindowToZone.N`.
+        for zoneID in 1 ... 6 {
+            specs.append(
+                action(
+                    id: "focusZone.\(zoneID)",
+                    command: .focusZone(zoneID),
+                    category: .focus,
+                    binding: .unassigned,
+                    visibility: .advanced
+                )
+            )
+            specs.append(
+                action(
+                    id: "moveWindowToZone.\(zoneID)",
+                    command: .moveWindowToZone(zoneID),
+                    category: .move,
+                    binding: .unassigned,
+                    visibility: .advanced
+                )
+            )
+        }
+
         for idx in 1 ... 9 {
             specs.append(
                 action(
@@ -912,7 +935,9 @@ enum ActionCatalog {
              .focusWindowOrWorkspaceUp,
              .focusColumnFirst,
              .focusColumnLast,
-             .focusColumn:
+             .focusColumn,
+             .focusZone,
+             .moveWindowToZone:
             .niri
 
         case .centerColumn,
@@ -940,6 +965,7 @@ enum ActionCatalog {
              .focusWorkspaceAnywhere,
              .moveWindowToWorkspaceOnMonitor,
              .openCommandPalette,
+             .openLeader,
              .raiseAllFloatingWindows,
              .rescueOffscreenWindows,
              .toggleFocusedWindowFloating,
@@ -999,6 +1025,8 @@ enum ActionCatalog {
         case .focusColumnFirst: "Focus First Column"
         case .focusColumnLast: "Focus Last Column"
         case let .focusColumn(idx): "Focus Column \(idx + 1)"
+        case let .focusZone(zoneID): "Focus Zone \(zoneID)"
+        case let .moveWindowToZone(zoneID): "Move Window to Zone \(zoneID)"
         case .centerColumn: "Center Column"
         case .centerVisibleColumns: "Center Visible Columns"
         case .cycleColumnWidthForward: "Cycle Column Width Forward"
@@ -1025,6 +1053,7 @@ enum ActionCatalog {
         case let .focusWorkspaceAnywhere(idx): "Focus Workspace \(idx + 1) Anywhere"
         case let .moveWindowToWorkspaceOnMonitor(wsIdx, monDir): "Move Window to Workspace \(wsIdx + 1) on \(monDir.displayName) Monitor"
         case .openCommandPalette: "Toggle Command Palette"
+        case .openLeader: "Open Leader"
         case .raiseAllFloatingWindows: "Raise All Floating Windows"
         case .rescueOffscreenWindows: "Rescue Off-Screen Floating Windows"
         case .toggleFocusedWindowFloating: "Toggle Focused Window Floating"
@@ -1065,6 +1094,10 @@ enum ActionCatalog {
             .focusWindowOrWorkspaceUp
         case .focusColumn:
             .focusColumn
+        case .focusZone:
+            .focusZone
+        case .moveWindowToZone:
+            .moveWindowToZone
         case .focusColumnFirst:
             .focusColumnFirst
         case .focusColumnLast:
@@ -1173,6 +1206,9 @@ enum ActionCatalog {
             .preselectClear
         case .openCommandPalette:
             .openCommandPalette
+        case .openLeader:
+            // Opened via hotkey / double-tap F15, not exposed over IPC.
+            nil
         case .raiseAllFloatingWindows:
             .raiseAllFloatingWindows
         case .rescueOffscreenWindows:

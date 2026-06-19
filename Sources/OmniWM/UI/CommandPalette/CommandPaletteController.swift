@@ -55,6 +55,7 @@ enum CommandPaletteSelectionID: Hashable {
     case window(WindowToken)
     case menu(UUID)
     case clipboard(UUID)
+    case leader(String)
 }
 
 enum CommandPaletteSelectionTrigger {
@@ -223,6 +224,22 @@ final class CommandPaletteController: NSObject, ObservableObject, NSWindowDelega
 
     @Published private(set) var isClipboardHistoryEnabled = false
 
+    // Fork addition: Leader (vim-style) tree state. `leaderMenuStack` is the current path of menu
+    // names (root first). Loaded fresh from leader.json each time leader opens.
+    @Published private(set) var leaderMenuStack: [String] = []
+    private(set) var leaderConfig = LeaderConfig.defaults
+    var leaderConfigProvider: () -> LeaderConfig = { LeaderConfigStore.loadOrSeed() }
+
+    var leaderItems: [LeaderMenuItem] {
+        LeaderNavigator.items(in: leaderConfig, menu: leaderMenuStack.last ?? leaderConfig.rootMenu)
+    }
+
+    var leaderStatusText: String {
+        var crumbs = ["Leader"]
+        for name in leaderMenuStack.dropFirst() { crumbs.append(name.capitalized) }
+        return crumbs.joined(separator: " ▸ ")
+    }
+
     private let environment: CommandPaletteEnvironment
     private let motionPolicy: MotionPolicy
     private let ownedWindowRegistry: OwnedWindowRegistry
@@ -373,6 +390,8 @@ final class CommandPaletteController: NSObject, ObservableObject, NSWindowDelega
             InlineHint(title: mode.displayName, shortcut: "⌘2")
         case .clipboard:
             InlineHint(title: mode.displayName, shortcut: "⌘3")
+        case .leader:
+            InlineHint(title: mode.displayName, shortcut: "⌘4")
         }
     }
 
@@ -445,13 +464,16 @@ final class CommandPaletteController: NSObject, ObservableObject, NSWindowDelega
     }
 
     private func resolvedInitialMode(_ preferredMode: CommandPaletteMode) -> CommandPaletteMode {
-        isModeAvailable(preferredMode) ? preferredMode : .windows
+        // Leader is only entered deliberately (⌘4 / double-tap F15), never as a persisted default.
+        guard preferredMode != .leader, isModeAvailable(preferredMode) else { return .windows }
+        return preferredMode
     }
 
     private func isModeAvailable(_ mode: CommandPaletteMode) -> Bool {
         switch mode {
         case .windows,
-             .clipboard:
+             .clipboard,
+             .leader:
             return true
         case .menu:
             return isMenuModeAvailable
@@ -767,6 +789,10 @@ final class CommandPaletteController: NSObject, ObservableObject, NSWindowDelega
             return true
         }
 
+        if selectedMode == .leader {
+            return handleLeaderKeyDown(event, modifiers: relevantModifiers)
+        }
+
         switch event.keyCode {
         case 53:
             dismiss(reason: .cancel)
@@ -854,6 +880,108 @@ final class CommandPaletteController: NSObject, ObservableObject, NSWindowDelega
         }
     }
 
+    // MARK: - Leader (vim-style menu tree)
+
+    /// Open (or refocus) the palette directly on the Leader tab, reset to its root menu.
+    /// Honors `leader.json`'s `doubleTapOpensLeader`: when false, opens the normal palette.
+    func toggleLeader(wmController: WMController) {
+        leaderConfig = leaderConfigProvider()
+        guard leaderConfig.doubleTapOpensLeader else {
+            toggle(wmController: wmController)
+            return
+        }
+        if isVisible, selectedMode == .leader {
+            dismiss(reason: .cancel)
+            return
+        }
+        if !isVisible {
+            show(wmController: wmController)
+        }
+        enterLeaderMode()
+    }
+
+    /// Switch the (already-open) palette into Leader mode at the root menu.
+    func enterLeaderMode() {
+        leaderConfig = leaderConfigProvider()
+        leaderMenuStack = [leaderConfig.rootMenu]
+        selectedMode = .leader
+        selectedItemID = currentSelectionList().first
+    }
+
+    private func handleLeaderKeyDown(_ event: NSEvent, modifiers: NSEvent.ModifierFlags) -> Bool {
+        switch event.keyCode {
+        case 53, 51: // escape, delete — back out one level (or dismiss at root)
+            leaderPopOrDismiss()
+            return true
+        case 126:
+            moveSelection(by: -1)
+            return true
+        case 125:
+            moveSelection(by: 1)
+            return true
+        case 36, 76: // return — activate the highlighted row
+            if case let .leader(key)? = selectedItemID {
+                activateLeaderKey(key)
+            }
+            return true
+        default:
+            // A single printable key (shift allowed for H/L); ⌘/⌥/⌃ are not leader keys.
+            guard !modifiers.contains(.command),
+                  !modifiers.contains(.control),
+                  !modifiers.contains(.option),
+                  let characters = event.charactersIgnoringModifiers,
+                  characters.count == 1
+            else {
+                return false
+            }
+            activateLeaderKey(characters)
+            return true
+        }
+    }
+
+    private func leaderPopOrDismiss() {
+        if leaderMenuStack.count > 1 {
+            leaderMenuStack.removeLast()
+            selectedItemID = currentSelectionList().first
+        } else {
+            dismiss(reason: .cancel)
+        }
+    }
+
+    func activateLeaderKey(_ key: String) {
+        let menu = leaderMenuStack.last ?? leaderConfig.rootMenu
+        switch LeaderNavigator.resolve(config: leaderConfig, menu: menu, key: key) {
+        case let .descend(submenu):
+            leaderMenuStack.append(submenu)
+            selectedItemID = currentSelectionList().first
+        case let .run(item):
+            let wmController = wmController
+            dismiss(reason: .selection)
+            dispatchLeaderItem(item, wmController: wmController)
+        case .none:
+            break
+        }
+    }
+
+    private func dispatchLeaderItem(_ item: LeaderMenuItem, wmController: WMController?) {
+        if let actionId = item.action, let command = ActionCatalog.spec(for: actionId)?.command {
+            _ = wmController?.commandHandler.handleCommand(command)
+            return
+        }
+        if let bundleID = item.app {
+            activateApp(bundleID: bundleID)
+        }
+    }
+
+    private func activateApp(bundleID: String) {
+        let workspace = NSWorkspace.shared
+        if let app = workspace.runningApplications.first(where: { $0.bundleIdentifier == bundleID }) {
+            app.activate(options: [])
+        } else if let url = workspace.urlForApplication(withBundleIdentifier: bundleID) {
+            workspace.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration())
+        }
+    }
+
     private func handleModeShortcut(_ characters: String) -> Bool {
         switch characters {
         case "1":
@@ -865,6 +993,9 @@ final class CommandPaletteController: NSObject, ObservableObject, NSWindowDelega
             return true
         case "3":
             selectedMode = .clipboard
+            return true
+        case "4":
+            enterLeaderMode()
             return true
         default:
             return false
@@ -913,6 +1044,10 @@ final class CommandPaletteController: NSObject, ObservableObject, NSWindowDelega
             case .alternate:
                 return .copyClipboard(wmController, id)
             }
+        case .leader:
+            // Leader dispatches on single keypress (and Enter via handleLeaderKeyDown), not through
+            // the shared selection-action path.
+            return nil
         }
     }
 
@@ -1051,6 +1186,8 @@ final class CommandPaletteController: NSObject, ObservableObject, NSWindowDelega
         case .clipboard:
             guard isClipboardHistoryEnabled else { return [] }
             return filteredClipboardItems.map { CommandPaletteSelectionID.clipboard($0.id) }
+        case .leader:
+            return leaderItems.map { CommandPaletteSelectionID.leader($0.key) }
         }
     }
 
@@ -1243,6 +1380,18 @@ private struct CommandPaletteView: View {
                                     )
                                     .id(CommandPaletteSelectionID.clipboard(item.id))
                                 }
+                            case .leader:
+                                ForEach(controller.leaderItems, id: \.key) { item in
+                                    CommandPaletteLeaderRow(
+                                        item: item,
+                                        isSelected: controller.selectedItemID == .leader(item.key)
+                                    )
+                                    .id(CommandPaletteSelectionID.leader(item.key))
+                                    .onTapGesture {
+                                        controller.selectedItemID = .leader(item.key)
+                                        controller.activateLeaderKey(item.key)
+                                    }
+                                }
                             }
                         }
                     }
@@ -1272,6 +1421,8 @@ private struct CommandPaletteView: View {
             "Search menu items..."
         case .clipboard:
             "Search clipboard history..."
+        case .leader:
+            "Press a key…"
         }
     }
 
@@ -1285,6 +1436,8 @@ private struct CommandPaletteView: View {
             controller.menuStatusText
         case .clipboard:
             controller.clipboardStatusText
+        case .leader:
+            controller.leaderStatusText
         }
     }
 
@@ -1297,6 +1450,8 @@ private struct CommandPaletteView: View {
                 (!controller.isMenuModeAvailable || controller.filteredMenuItems.isEmpty)
         case .clipboard:
             controller.isClipboardHistoryEnabled && controller.filteredClipboardItems.isEmpty
+        case .leader:
+            controller.leaderItems.isEmpty
         }
     }
 
@@ -1308,6 +1463,8 @@ private struct CommandPaletteView: View {
             controller.isMenuModeAvailable ? "text.magnifyingglass" : "menubar.rectangle"
         case .clipboard:
             "clipboard"
+        case .leader:
+            "command"
         }
     }
 
@@ -1322,6 +1479,8 @@ private struct CommandPaletteView: View {
             return controller.searchText.isEmpty ? "No menu items available" : "No menu items found"
         case .clipboard:
             return controller.searchText.isEmpty ? "No clipboard items available" : "No clipboard items found"
+        case .leader:
+            return "This leader menu is empty"
         }
     }
 }
@@ -1565,6 +1724,36 @@ private struct CommandPaletteMenuRow: View {
 
             if let shortcut = item.keyboardShortcut {
                 CommandPaletteShortcutBadge(text: shortcut)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .background(isSelected ? Color.accentColor.opacity(0.2) : Color.clear)
+        .contentShape(Rectangle())
+    }
+}
+
+private struct CommandPaletteLeaderRow: View {
+    let item: LeaderMenuItem
+    let isSelected: Bool
+
+    private var isFolder: Bool { item.menu != nil }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            CommandPaletteShortcutBadge(text: item.key)
+                .frame(minWidth: 28)
+
+            Text(item.title)
+                .font(.system(size: 14, weight: .medium))
+                .lineLimit(1)
+
+            Spacer()
+
+            if isFolder {
+                Text("▸")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.secondary)
             }
         }
         .padding(.horizontal, 16)

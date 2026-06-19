@@ -116,6 +116,11 @@ struct SettingsExport: Equatable {
     var appearanceMode: String
 
     var capabilityOverrides: [WindowCapabilityProfileTOMLOverride] = []
+
+    // Fork additions (off by default): F15 chord layer + Zones anchor model.
+    var f15Enabled: Bool = false
+    var f15DoubleTapSeconds: Double = 0.3
+    var zonesEnabled: Bool = false
 }
 
 // MARK: - Defaults & Diffing

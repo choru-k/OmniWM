@@ -5,6 +5,13 @@ import PackageDescription
 let packageDirectory = URL(fileURLWithPath: #filePath).deletingLastPathComponent().path
 let ghosttyMacOSLibraryDirectory = "\(packageDirectory)/Frameworks/GhosttyKit.xcframework/macos-arm64_x86_64"
 
+// The upstream OmniWMTests target imports XCTest, which only resolves when a full Xcode is the
+// active toolchain (`xcode-select`). On a CommandLineTools-only / swiftly dev box XCTest is absent,
+// so including that target breaks `swift test` entirely. Default to excluding it; opt in with
+// OMNIWM_INCLUDE_XCTEST=1 on machines/CI where Xcode is selected. The fork's swift-testing
+// OmniWMFeatureTests target runs regardless.
+let includeXCTestTarget = ProcessInfo.processInfo.environment["OMNIWM_INCLUDE_XCTEST"] == "1"
+
 let package = Package(
     name: "OmniWM",
     platforms: [
@@ -81,6 +88,22 @@ let package = Package(
                 .swiftLanguageMode(.v6)
             ]
         ),
+        // Fork additions: swift-testing-based tests for ported features (F15 / Zones / Leader).
+        // Separate from OmniWMTests (which is XCTest-based and needs full Xcode); these run under
+        // the swiftly toolchain alone.
+        .testTarget(
+            name: "OmniWMFeatureTests",
+            dependencies: ["OmniWM"],
+            path: "Tests/OmniWMFeatureTests",
+            swiftSettings: [
+                .swiftLanguageMode(.v6)
+            ]
+        )
+    ]
+)
+
+if includeXCTestTarget {
+    package.targets.append(
         .testTarget(
             name: "OmniWMTests",
             dependencies: ["OmniWM"],
@@ -92,5 +115,5 @@ let package = Package(
                 .swiftLanguageMode(.v6)
             ]
         )
-    ]
-)
+    )
+}

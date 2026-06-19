@@ -53,6 +53,9 @@ enum HotkeyCommand: Codable, Equatable, Hashable {
     case focusColumnFirst
     case focusColumnLast
     case focusColumn(Int)
+    // Fork addition: Zones (anchor model). Zone ids are 1-based.
+    case focusZone(Int)
+    case moveWindowToZone(Int)
     case centerColumn
     case centerVisibleColumns
     case cycleColumnWidthForward
@@ -83,6 +86,8 @@ enum HotkeyCommand: Codable, Equatable, Hashable {
     case moveWindowToWorkspaceOnMonitor(workspaceIndex: Int, monitorDirection: Direction)
 
     case openCommandPalette
+    // Fork addition: open the Leader tab of the command palette (double-tap F15 in Phase 3).
+    case openLeader
 
     case raiseAllFloatingWindows
     case rescueOffscreenWindows

@@ -206,6 +206,9 @@ public enum IPCCommandName: String, Codable, CaseIterable, Equatable, Sendable {
     case focusColumn = "focus-column"
     case focusColumnFirst = "focus-column-first"
     case focusColumnLast = "focus-column-last"
+    // Fork addition: Zones (anchor model). Arg is the 1-based zone id.
+    case focusZone = "focus-zone"
+    case moveWindowToZone = "move-window-to-zone"
     case centerColumn = "center-column"
     case centerVisibleColumns = "center-visible-columns"
     case move
@@ -333,6 +336,8 @@ public enum IPCCommandRequest: Equatable, Sendable {
     case focusWindowOrWorkspaceDown
     case focusWindowOrWorkspaceUp
     case focusColumn(columnIndex: Int)
+    case focusZone(zoneId: Int)
+    case moveWindowToZone(zoneId: Int)
     case focusColumnFirst
     case focusColumnLast
     case centerColumn
@@ -428,6 +433,10 @@ public enum IPCCommandRequest: Equatable, Sendable {
             .focusWindowOrWorkspaceUp
         case .focusColumn:
             .focusColumn
+        case .focusZone:
+            .focusZone
+        case .moveWindowToZone:
+            .moveWindowToZone
         case .focusColumnFirst:
             .focusColumnFirst
         case .focusColumnLast:
@@ -656,6 +665,10 @@ public enum IPCCommandRequest: Equatable, Sendable {
             self = .focusWindowOrWorkspaceUp
         case .focusColumn:
             self = .focusColumn(columnIndex: try requireInteger())
+        case .focusZone:
+            self = .focusZone(zoneId: try requireInteger())
+        case .moveWindowToZone:
+            self = .moveWindowToZone(zoneId: try requireInteger())
         case .focusColumnFirst:
             try requireNoArguments()
             self = .focusColumnFirst
@@ -872,6 +885,10 @@ extension IPCCommandRequest: Codable {
         let columnIndex: Int
     }
 
+    private struct IPCZoneArguments: Codable, Equatable, Sendable {
+        let zoneId: Int
+    }
+
     private struct IPCWindowIndexArguments: Codable, Equatable, Sendable {
         let windowIndex: Int
     }
@@ -926,6 +943,12 @@ extension IPCCommandRequest: Codable {
         case .focusColumn:
             let arguments = try container.decode(IPCColumnIndexArguments.self, forKey: .arguments)
             self = .focusColumn(columnIndex: arguments.columnIndex)
+        case .focusZone:
+            let arguments = try container.decode(IPCZoneArguments.self, forKey: .arguments)
+            self = .focusZone(zoneId: arguments.zoneId)
+        case .moveWindowToZone:
+            let arguments = try container.decode(IPCZoneArguments.self, forKey: .arguments)
+            self = .moveWindowToZone(zoneId: arguments.zoneId)
         case .focusColumnFirst:
             self = .focusColumnFirst
         case .focusColumnLast:
@@ -1109,6 +1132,10 @@ extension IPCCommandRequest: Codable {
             break
         case let .focusColumn(columnIndex):
             try container.encode(IPCColumnIndexArguments(columnIndex: columnIndex), forKey: .arguments)
+        case let .focusZone(zoneId):
+            try container.encode(IPCZoneArguments(zoneId: zoneId), forKey: .arguments)
+        case let .moveWindowToZone(zoneId):
+            try container.encode(IPCZoneArguments(zoneId: zoneId), forKey: .arguments)
         case .focusColumnFirst:
             break
         case .focusColumnLast:

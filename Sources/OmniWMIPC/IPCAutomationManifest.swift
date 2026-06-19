@@ -254,6 +254,11 @@ public enum IPCAutomationManifest {
         kind: .columnIndex,
         summary: "One-based column index."
     )
+    // Fork addition: Zones (anchor model). 1-based zone id; reuses the integer kind (placeholder <number>).
+    private static let zoneArgument = IPCCommandArgumentDescriptor(
+        kind: .columnIndex,
+        summary: "One-based zone id (1–6)."
+    )
     private static let windowIndexArgument = IPCCommandArgumentDescriptor(
         kind: .windowIndex,
         summary: "One-based window index within the focused column."
@@ -487,6 +492,20 @@ public enum IPCAutomationManifest {
             name: .focusColumn,
             summary: "Focus a Niri column by one-based index.",
             arguments: [columnIndexArgument],
+            layoutCompatibility: .niri
+        ),
+        command(
+            ["focus-zone"],
+            name: .focusZone,
+            summary: "Jump focus to a zone's anchor (fork addition).",
+            arguments: [zoneArgument],
+            layoutCompatibility: .niri
+        ),
+        command(
+            ["move-window-to-zone"],
+            name: .moveWindowToZone,
+            summary: "Tag the focused window's column to a zone and group it there (fork addition).",
+            arguments: [zoneArgument],
             layoutCompatibility: .niri
         ),
         command(

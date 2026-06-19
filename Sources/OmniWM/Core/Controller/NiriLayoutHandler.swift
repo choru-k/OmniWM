@@ -425,6 +425,26 @@ import QuartzCore
             snapshot: snapshot
         )
 
+        // Fork addition: keep the strip in zone order on every relayout of the active workspace
+        // (no-op if zones are disabled or already sorted). This catches all reorders — new windows,
+        // float→tile, manual moves — not just fresh insertions. Pin the viewport to the pass's
+        // intended focus.
+        // ponytail: gated to the active workspace; the single global ZoneEngine re-derives tags per
+        // workspace, so cross-workspace sticky tags aren't preserved — fine for the one-strip setup.
+        if let controller,
+           controller.workspaceManager.activeWorkspace(on: pass.monitor.id)?.id == pass.wsId
+        {
+            pass.engine.applyZoneOrdering(
+                zoneEngine: &controller.zoneEngine,
+                in: pass.wsId,
+                motion: motion,
+                state: &state,
+                workingFrame: pass.insetFrame,
+                gaps: pass.gap,
+                keepFocusOn: arrival.activateWindowToken ?? arrival.rememberedFocusToken ?? selection.rememberedFocusToken
+            )
+        }
+
         var plan = computeLayoutPlan(
             pass: pass,
             motion: motion,

@@ -144,6 +144,10 @@ final class CommandHandler {
             focusColumnLastInNiri()
         case let .focusColumn(index):
             focusColumnInNiri(index: index)
+        case let .focusZone(zoneID):
+            focusZoneInNiri(zoneID: zoneID)
+        case let .moveWindowToZone(zoneID):
+            moveWindowToZoneInNiri(zoneID: zoneID)
         case .centerColumn:
             controller.niriLayoutHandler.centerColumn()
         case .centerVisibleColumns:
@@ -199,6 +203,8 @@ final class CommandHandler {
             )
         case .openCommandPalette:
             controller.openCommandPalette()
+        case .openLeader:
+            controller.openLeaderPalette()
         case .raiseAllFloatingWindows:
             controller.raiseAllFloatingWindows()
         case .rescueOffscreenWindows:
@@ -445,6 +451,80 @@ final class CommandHandler {
                 workingFrame: workingFrame,
                 gaps: gaps
             )
+        }
+    }
+
+    // MARK: - Zones (anchors in the single strip)
+
+    /// A stable id for a column, keyed off its first window's token ("pid:windowId").
+    private static func zoneAnchorID(_ column: NiriContainer) -> String {
+        guard let token = column.windowNodes.first?.token else {
+            return "col-\(ObjectIdentifier(column).hashValue)"
+        }
+        return "\(token.pid):\(token.windowId)"
+    }
+
+    private static func zoneBundleID(_ column: NiriContainer) -> String {
+        guard let pid = column.windowNodes.first?.token.pid else { return "" }
+        return NSRunningApplication(processIdentifier: pid)?.bundleIdentifier ?? ""
+    }
+
+    private func zoneWindows(_ columns: [NiriContainer]) -> (order: [String], windows: [ZoneWindow]) {
+        let order = columns.map { Self.zoneAnchorID($0) }
+        let windows = columns.map { ZoneWindow(id: Self.zoneAnchorID($0), bundleID: Self.zoneBundleID($0)) }
+        return (order, windows)
+    }
+
+    /// Jump focus to a zone's anchor (the first column tagged to that zone). No-op if zones are
+    /// disabled or the zone is empty.
+    private func focusZoneInNiri(zoneID: Int) {
+        guard let controller else { return }
+        executeCombinedNavigation { engine, currentNode, wsId, motion, state, workingFrame, gaps in
+            let cols = engine.columns(in: wsId)
+            let (order, windows) = self.zoneWindows(cols)
+            _ = controller.zoneEngine.reconciledOrder(windows: windows, orderedWindowIDs: order)
+            controller.zoneEngine.setCurrentZone(zoneID)
+            guard
+                let target = controller.zoneEngine.restoredFocusTarget(forZone: zoneID, orderedWindowIDs: order),
+                let index = order.firstIndex(of: target)
+            else {
+                return currentNode
+            }
+            controller.zoneEngine.rememberFocus(windowID: target, inZone: zoneID)
+            return engine.focusColumn(
+                index,
+                currentSelection: currentNode,
+                in: wsId,
+                motion: motion,
+                state: &state,
+                workingFrame: workingFrame,
+                gaps: gaps
+            )
+        }
+    }
+
+    /// Tag the focused window's column to a zone and slide it into that zone's region of the strip,
+    /// keeping zones grouped. No-op if zones are disabled.
+    private func moveWindowToZoneInNiri(zoneID: Int) {
+        guard let controller else { return }
+        executeCombinedNavigation { engine, currentNode, wsId, motion, state, workingFrame, gaps in
+            let cols = engine.columns(in: wsId)
+            let (order, windows) = self.zoneWindows(cols)
+            _ = controller.zoneEngine.reconciledOrder(windows: windows, orderedWindowIDs: order)
+            guard let focusedColumn = engine.column(of: currentNode) else { return currentNode }
+            let movedID = Self.zoneAnchorID(focusedColumn)
+            let newOrder = controller.zoneEngine.move(windowID: movedID, toZone: zoneID, orderedWindowIDs: order)
+            guard let targetIndex = newOrder.firstIndex(of: movedID) else { return currentNode }
+            _ = engine.moveColumnToIndex(
+                focusedColumn,
+                targetIndex + 1,
+                in: wsId,
+                motion: motion,
+                state: &state,
+                workingFrame: workingFrame,
+                gaps: gaps
+            )
+            return currentNode
         }
     }
 

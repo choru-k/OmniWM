@@ -282,6 +282,19 @@ final class SettingsStore {
         didSet { scheduleSave() }
     }
 
+    // Fork additions (off by default): F15 chord layer + Zones anchor model.
+    var f15Enabled = SettingsStore.defaultExport.f15Enabled {
+        didSet { scheduleSave() }
+    }
+
+    var f15DoubleTapSeconds = SettingsStore.defaultExport.f15DoubleTapSeconds {
+        didSet { scheduleSave() }
+    }
+
+    var zonesEnabled = SettingsStore.defaultExport.zonesEnabled {
+        didSet { scheduleSave() }
+    }
+
     var updateChecksEnabled = SettingsStore.defaultExport.updateChecksEnabled {
         didSet { scheduleSave() }
     }
@@ -604,7 +617,10 @@ final class SettingsStore {
             quakeTerminalOpacity: quakeTerminalOpacity,
             quakeTerminalMonitorMode: quakeTerminalMonitorMode.rawValue,
             appearanceMode: appearanceMode.rawValue,
-            capabilityOverrides: []
+            capabilityOverrides: [],
+            f15Enabled: f15Enabled,
+            f15DoubleTapSeconds: f15DoubleTapSeconds,
+            zonesEnabled: zonesEnabled
         )
     }
 
@@ -698,6 +714,9 @@ final class SettingsStore {
         updateChecksEnabled = export.updateChecksEnabled
         ipcEnabled = export.ipcEnabled
         spacesTrackingEnabled = export.spacesTrackingEnabled
+        f15Enabled = export.f15Enabled
+        f15DoubleTapSeconds = export.f15DoubleTapSeconds
+        zonesEnabled = export.zonesEnabled
         scrollGestureEnabled = export.scrollGestureEnabled
         scrollSensitivity = export.scrollSensitivity
         scrollModifierKey = ScrollModifierKey(rawValue: export.scrollModifierKey) ?? .optionShift

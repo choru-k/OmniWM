@@ -903,4 +903,73 @@ extension NiriLayoutEngine {
             )
         }
     }
+
+    // MARK: - Zones (anchor model)
+
+    /// A stable id for a column, keyed off its first window's token ("pid:windowId").
+    static func zoneAnchorID(_ column: NiriContainer) -> String {
+        guard let token = column.windowNodes.first?.token else {
+            return "col-\(ObjectIdentifier(column).hashValue)"
+        }
+        return "\(token.pid):\(token.windowId)"
+    }
+
+    static func zoneBundleID(_ column: NiriContainer) -> String {
+        guard let pid = column.windowNodes.first?.token.pid else { return "" }
+        return NSRunningApplication(processIdentifier: pid)?.bundleIdentifier ?? ""
+    }
+
+    /// Reorder every column in the workspace into zone order (meeting→…→ai) using the zone
+    /// engine's reconciled order. No-op when zones are disabled or the strip is already sorted
+    /// (`reconciledOrder` returns the input unchanged when `config.enabled == false`).
+    /// Preserves the user's focused column by re-pinning `activeColumnIndex` afterward.
+    /// ponytail: O(n) selection-sort over a handful of columns; runs only when order differs, so
+    /// the steady state is a single comparison. Each move animates — fine for the rare reorder.
+    @discardableResult
+    func applyZoneOrdering(
+        zoneEngine: inout ZoneEngine,
+        in workspaceId: WorkspaceDescriptor.ID,
+        motion: MotionSnapshot,
+        state: inout ViewportState,
+        workingFrame: CGRect,
+        gaps: CGFloat,
+        keepFocusOn focusToken: WindowToken? = nil
+    ) -> Bool {
+        let cols = columns(in: workspaceId)
+        guard cols.count > 1 else { return false }
+        let order = cols.map { Self.zoneAnchorID($0) }
+        let windows = cols.map { ZoneWindow(id: Self.zoneAnchorID($0), bundleID: Self.zoneBundleID($0)) }
+        let target = zoneEngine.reconciledOrder(windows: windows, orderedWindowIDs: order)
+        guard target != order else { return false }
+
+        // Keep the viewport on the window the pass intends to focus (explicit token wins, else the
+        // current selection), re-pinning its column index after the reorder.
+        let focusedColumn = focusToken.flatMap { findNode(for: $0) }.flatMap { column(of: $0) }
+            ?? state.selectedNodeId.flatMap { findNode(by: $0) }.flatMap { column(of: $0) }
+        let focusedAnchor = focusedColumn.map { Self.zoneAnchorID($0) }
+
+        for targetIdx in target.indices {
+            let desiredID = target[targetIdx]
+            let current = columns(in: workspaceId)
+            guard let curIdx = current.firstIndex(where: { Self.zoneAnchorID($0) == desiredID }) else { continue }
+            if curIdx != targetIdx {
+                _ = moveColumnToIndex(
+                    current[curIdx],
+                    targetIdx + 1,
+                    in: workspaceId,
+                    motion: motion,
+                    state: &state,
+                    workingFrame: workingFrame,
+                    gaps: gaps
+                )
+            }
+        }
+
+        if let focusedAnchor,
+           let idx = columns(in: workspaceId).firstIndex(where: { Self.zoneAnchorID($0) == focusedAnchor })
+        {
+            state.activeColumnIndex = idx
+        }
+        return true
+    }
 }

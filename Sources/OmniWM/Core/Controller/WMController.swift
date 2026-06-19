@@ -171,6 +171,12 @@ final class WMController {
     private(set) lazy var spaceTracker = SpaceTracker(controller: self)
     @ObservationIgnored
     private(set) lazy var commandHandler = CommandHandler(controller: self)
+    /// Fork addition: zone anchor state. Definitions + app→zone map load from zones.json;
+    /// the on/off switch comes from settings.toml ([general] zonesEnabled).
+    var zoneEngine = ZoneEngine()
+    /// Fork addition: F15 hold-chord + double-tap-leader layer. Standalone CGEvent tap (F15 isn't a
+    /// Carbon modifier); needs Input Monitoring. Off until [general] f15Enabled is set.
+    private let f15EventTap = F15EventTap()
     @ObservationIgnored
     private(set) lazy var workspaceNavigationHandler = WorkspaceNavigationHandler(controller: self)
     @ObservationIgnored
@@ -309,6 +315,15 @@ final class WMController {
             columnWidthPresets: settings.niriColumnWidthPresets,
             defaultColumnWidth: settings.niriDefaultColumnWidth
         )
+
+        var zonesConfig = ZonesConfigStore.loadOrSeed() // definitions + app→zone map from zones.json
+        zonesConfig.enabled = settings.zonesEnabled      // master on/off stays in settings.toml
+        zoneEngine.configure(zonesConfig)
+
+        f15EventTap.onCommand = { [weak self] command in
+            _ = self?.commandHandler.handleCommand(command)
+        }
+        f15EventTap.configure(enabled: settings.f15Enabled, doubleTapSeconds: settings.f15DoubleTapSeconds)
 
         if dwindleEngine == nil {
             enableDwindleLayout()
@@ -2496,6 +2511,11 @@ final class WMController {
 
     func openCommandPalette() {
         commandPaletteController.toggle(wmController: self)
+    }
+
+    /// Fork addition: open the palette directly on the Leader tab (double-tap F15 / bindable hotkey).
+    func openLeaderPalette() {
+        commandPaletteController.toggleLeader(wmController: self)
     }
 
     func clipboardPaletteItems() -> [ClipboardPaletteItem] {

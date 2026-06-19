@@ -41,6 +41,10 @@ struct CanonicalTOMLConfig: Codable, Equatable {
         var ipcEnabled: Bool
         var spacesTrackingEnabled: Bool
         var animationsEnabled: Bool
+        // Fork additions (off by default): F15 chord layer + Zones anchor model.
+        var f15Enabled: Bool
+        var f15DoubleTapSeconds: Double
+        var zonesEnabled: Bool
     }
 
     struct Focus: Codable, Equatable {
@@ -425,6 +429,24 @@ extension CanonicalTOMLConfig.General {
             Bool.self,
             forKey: .animationsEnabled,
             default: defaults.animationsEnabled,
+            recovering: recovering
+        )
+        f15Enabled = try container.decode(
+            Bool.self,
+            forKey: .f15Enabled,
+            default: defaults.f15Enabled,
+            recovering: recovering
+        )
+        f15DoubleTapSeconds = try container.decode(
+            Double.self,
+            forKey: .f15DoubleTapSeconds,
+            default: defaults.f15DoubleTapSeconds,
+            recovering: recovering
+        )
+        zonesEnabled = try container.decode(
+            Bool.self,
+            forKey: .zonesEnabled,
+            default: defaults.zonesEnabled,
             recovering: recovering
         )
     }
@@ -889,7 +911,10 @@ extension CanonicalTOMLConfig {
             updateChecksEnabled: export.updateChecksEnabled,
             ipcEnabled: export.ipcEnabled,
             spacesTrackingEnabled: export.spacesTrackingEnabled,
-            animationsEnabled: export.animationsEnabled
+            animationsEnabled: export.animationsEnabled,
+            f15Enabled: export.f15Enabled,
+            f15DoubleTapSeconds: export.f15DoubleTapSeconds,
+            zonesEnabled: export.zonesEnabled
         )
         focus = Focus(
             followsMouse: export.focusFollowsMouse,
@@ -1088,7 +1113,10 @@ extension CanonicalTOMLConfig {
             quakeTerminalAutoHide: quakeTerminal.autoHide,
             quakeTerminalOpacity: quakeTerminal.opacity,
             quakeTerminalMonitorMode: quakeTerminal.monitorMode,
-            appearanceMode: appearance.mode
+            appearanceMode: appearance.mode,
+            f15Enabled: general.f15Enabled,
+            f15DoubleTapSeconds: general.f15DoubleTapSeconds,
+            zonesEnabled: general.zonesEnabled
         )
     }
 }

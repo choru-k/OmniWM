@@ -46,6 +46,11 @@ final class IPCCommandRouter {
                 return .invalidArguments
             }
             return controller.commandHandler.performCommand(.focusColumn(zeroBasedIndex))
+        case let .focusZone(zoneId):
+            // Zone ids are 1-based throughout (config, engine, IPC) — no zero-based conversion.
+            return controller.commandHandler.performCommand(.focusZone(zoneId))
+        case let .moveWindowToZone(zoneId):
+            return controller.commandHandler.performCommand(.moveWindowToZone(zoneId))
         case .focusColumnFirst:
             return controller.commandHandler.performCommand(.focusColumnFirst)
         case .focusColumnLast:
