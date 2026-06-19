@@ -15,6 +15,7 @@ struct SettingsExport: Equatable {
     var focusFollowsMouse: Bool
     var moveMouseToFocusedWindow: Bool
     var focusFollowsWindowToMonitor: Bool
+    var focusCrossesMonitorAtEdge: Bool
     var mouseWarpMonitorOrder: [String]
     var mouseWarpAxis: String?
     var mouseWarpMargin: Int
@@ -121,6 +122,7 @@ extension SettingsExport {
             focusFollowsMouse: false,
             moveMouseToFocusedWindow: false,
             focusFollowsWindowToMonitor: false,
+            focusCrossesMonitorAtEdge: false,
             mouseWarpMonitorOrder: [],
             mouseWarpAxis: MouseWarpAxis.horizontal.rawValue,
             mouseWarpMargin: 1,

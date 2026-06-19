@@ -151,25 +151,27 @@ import QuartzCore
 
     // MARK: - Layout Capability Commands
 
-    func focusNeighbor(direction: Direction) {
-        guard let controller else { return }
+    func focusNeighbor(direction: Direction) -> Bool {
+        guard let controller else { return false }
+        var didMove = false
         withDwindleContext { engine, wsId in
-            if let token = engine.moveFocus(direction: direction, in: wsId) {
-                _ = controller.workspaceManager.applySessionPatch(
-                    .init(
-                        workspaceId: wsId,
-                        viewportState: nil,
-                        rememberedFocusToken: token,
-                        plannedSeq: controller.workspaceManager.worldSeq
-                    )
+            guard let token = engine.moveFocus(direction: direction, in: wsId) else { return }
+            didMove = true
+            _ = controller.workspaceManager.applySessionPatch(
+                .init(
+                    workspaceId: wsId,
+                    viewportState: nil,
+                    rememberedFocusToken: token,
+                    plannedSeq: controller.workspaceManager.worldSeq
                 )
-                controller.layoutRefreshController.requestLayoutCommandRelayout(
-                    affectedWorkspaceIds: [wsId]
-                ) { [weak controller] in
-                    controller?.focusWindow(token)
-                }
+            )
+            controller.layoutRefreshController.requestLayoutCommandRelayout(
+                affectedWorkspaceIds: [wsId]
+            ) { [weak controller] in
+                controller?.focusWindow(token)
             }
         }
+        return didMove
     }
 
     func activateWindow(

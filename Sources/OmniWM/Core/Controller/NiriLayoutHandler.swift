@@ -1149,15 +1149,16 @@ enum NiriWindowMoveResult {
 
     // MARK: - Layout Capability Commands
 
-    func focusNeighbor(direction: Direction) {
-        guard let controller else { return }
-        guard let engine = controller.niriEngine else { return }
-        guard let wsId = controller.activeWorkspace()?.id else { return }
+    func focusNeighbor(direction: Direction) -> Bool {
+        guard let controller else { return false }
+        guard let engine = controller.niriEngine else { return false }
+        guard let wsId = controller.activeWorkspace()?.id else { return false }
 
         var state = controller.workspaceManager.niriViewportState(for: wsId)
         guard let currentId = state.selectedNodeId,
               let currentNode = engine.findNode(by: currentId)
         else {
+            var recovered = false
             if let lastFocused = controller.workspaceManager.lastFocusedToken(in: wsId),
                let lastNode = engine.findNode(for: lastFocused)
             {
@@ -1170,6 +1171,7 @@ enum NiriWindowMoveResult {
                         startAnimation: false
                     )
                 )
+                recovered = true
             } else if let firstToken = controller.workspaceManager.tiledEntries(in: wsId).first?.token,
                       let firstNode = engine.findNode(for: firstToken)
             {
@@ -1182,6 +1184,7 @@ enum NiriWindowMoveResult {
                         startAnimation: false
                     )
                 )
+                recovered = true
             }
             _ = controller.workspaceManager.applySessionPatch(
                 .init(
@@ -1191,10 +1194,10 @@ enum NiriWindowMoveResult {
                     plannedSeq: controller.workspaceManager.worldSeq
                 )
             )
-            return
+            return recovered
         }
 
-        guard let monitor = controller.workspaceManager.monitor(for: wsId) else { return }
+        guard let monitor = controller.workspaceManager.monitor(for: wsId) else { return false }
         let gap = CGFloat(controller.workspaceManager.gaps)
         let workingFrame = controller.insetWorkingFrame(for: monitor)
 
@@ -1213,26 +1216,26 @@ enum NiriWindowMoveResult {
                 gaps: gap
             )
         }
-        if let newNode {
-            activateNode(
-                newNode, in: wsId, state: &state,
-                options: .init(
-                    activateWindow: false,
-                    ensureVisible: false,
-                    layoutRefresh: false,
-                    axFocus: false
-                )
+        guard let newNode else { return false }
+        activateNode(
+            newNode, in: wsId, state: &state,
+            options: .init(
+                activateWindow: false,
+                ensureVisible: false,
+                layoutRefresh: false,
+                axFocus: false
             )
-            _ = controller.workspaceManager.applySessionPatch(
-                .init(
-                    workspaceId: wsId,
-                    viewportState: state,
-                    rememberedFocusToken: nil,
-                    plannedSeq: controller.workspaceManager.worldSeq
-                )
+        )
+        _ = controller.workspaceManager.applySessionPatch(
+            .init(
+                workspaceId: wsId,
+                viewportState: state,
+                rememberedFocusToken: nil,
+                plannedSeq: controller.workspaceManager.worldSeq
             )
-            requestSelectedWindowFocusAfterLayout(in: wsId)
-        }
+        )
+        requestSelectedWindowFocusAfterLayout(in: wsId)
+        return true
     }
 
     func toggleFullscreen() {

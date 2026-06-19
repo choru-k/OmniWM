@@ -1,5 +1,5 @@
 @MainActor protocol LayoutFocusable: AnyObject {
-    func focusNeighbor(direction: Direction)
+    func focusNeighbor(direction: Direction) -> Bool
 }
 
 @MainActor protocol LayoutSizable: AnyObject {

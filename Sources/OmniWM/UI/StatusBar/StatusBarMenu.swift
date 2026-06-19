@@ -101,6 +101,7 @@ final class StatusBarMenuBuilder {
     func updateToggles() {
         toggleViews["focusFollowsMouse"]?.isOn = settings.focusFollowsMouse
         toggleViews["focusFollowsWindowToMonitor"]?.isOn = settings.focusFollowsWindowToMonitor
+        toggleViews["focusCrossesMonitorAtEdge"]?.isOn = settings.focusCrossesMonitorAtEdge
         toggleViews["moveMouseToFocusedWindow"]?.isOn = settings.moveMouseToFocusedWindow
         toggleViews["bordersEnabled"]?.isOn = settings.bordersEnabled
         toggleViews["workspaceBarEnabled"]?.isOn = settings.workspaceBarEnabled
@@ -164,6 +165,19 @@ final class StatusBarMenuBuilder {
         let followMoveItem = NSMenuItem()
         followMoveItem.view = followMoveToggle
         menu.addItem(followMoveItem)
+
+        let crossMonitorToggle = MenuToggleRowView(
+            icon: "display.2",
+            label: "Cross Monitor at Edge",
+            isOn: settings.focusCrossesMonitorAtEdge,
+            motionPolicy: motionPolicy
+        ) { [weak self] newValue in
+            self?.settings.focusCrossesMonitorAtEdge = newValue
+        }
+        toggleViews["focusCrossesMonitorAtEdge"] = crossMonitorToggle
+        let crossMonitorItem = NSMenuItem()
+        crossMonitorItem.view = crossMonitorToggle
+        menu.addItem(crossMonitorItem)
 
         let mouseToFocusedToggle = MenuToggleRowView(
             icon: "arrow.up.left.and.down.right.magnifyingglass",

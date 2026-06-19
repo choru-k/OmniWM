@@ -33,6 +33,10 @@ final class SettingsStore {
         didSet { scheduleSave() }
     }
 
+    var focusCrossesMonitorAtEdge = SettingsStore.defaultExport.focusCrossesMonitorAtEdge {
+        didSet { scheduleSave() }
+    }
+
     var mouseWarpMonitorOrder = SettingsStore.defaultExport.mouseWarpMonitorOrder {
         didSet { scheduleSave() }
     }
@@ -506,6 +510,7 @@ final class SettingsStore {
             focusFollowsMouse: focusFollowsMouse,
             moveMouseToFocusedWindow: moveMouseToFocusedWindow,
             focusFollowsWindowToMonitor: focusFollowsWindowToMonitor,
+            focusCrossesMonitorAtEdge: focusCrossesMonitorAtEdge,
             mouseWarpMonitorOrder: mouseWarpMonitorOrder,
             mouseWarpAxis: mouseWarpAxis.rawValue,
             mouseWarpMargin: mouseWarpMargin,
@@ -600,6 +605,7 @@ final class SettingsStore {
         focusFollowsMouse = export.focusFollowsMouse
         moveMouseToFocusedWindow = export.moveMouseToFocusedWindow
         focusFollowsWindowToMonitor = export.focusFollowsWindowToMonitor
+        focusCrossesMonitorAtEdge = export.focusCrossesMonitorAtEdge
         mouseWarpMonitorOrder = export.mouseWarpMonitorOrder
         mouseWarpAxis = MouseWarpAxis(rawValue: export.mouseWarpAxis ?? baseline.mouseWarpAxis ?? "") ?? .horizontal
         mouseWarpMargin = export.mouseWarpMargin

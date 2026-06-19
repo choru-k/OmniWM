@@ -163,6 +163,24 @@ final class SettingsTOMLCodecTests: XCTestCase {
         XCTAssertEqual(try SettingsTOMLCodec.decode(unsupportedMouse).systemHyperTrigger, .none)
     }
 
+    func testFocusCrossesMonitorAtEdgeRoundTrips() throws {
+        XCTAssertFalse(SettingsExport.defaults().focusCrossesMonitorAtEdge)
+
+        var export = SettingsExport.defaults()
+        export.focusCrossesMonitorAtEdge = true
+        let data = try SettingsTOMLCodec.encode(export)
+
+        XCTAssertTrue(String(decoding: data, as: UTF8.self).contains("crossesMonitorAtEdge = true"))
+        XCTAssertTrue(try SettingsTOMLCodec.decode(data).focusCrossesMonitorAtEdge)
+    }
+
+    func testFocusCrossesMonitorAtEdgeRecoversToFalseWhenMissing() throws {
+        let withoutKey = try defaultsWithReplacements(
+            ("crossesMonitorAtEdge = false\n", "")
+        )
+        XCTAssertFalse(try SettingsTOMLCodec.decode(withoutKey).focusCrossesMonitorAtEdge)
+    }
+
     private func defaultsWithReplacements(_ replacements: (String, String)...) throws -> Data {
         var toml = String(decoding: try SettingsTOMLCodec.encode(.defaults()), as: UTF8.self)
         for (target, replacement) in replacements {

@@ -51,7 +51,11 @@ final class CommandHandler {
 
         switch command {
         case let .focus(direction):
-            layoutHandler(as: LayoutFocusable.self)?.focusNeighbor(direction: direction)
+            if layoutHandler(as: LayoutFocusable.self)?.focusNeighbor(direction: direction) != true,
+               controller.settings.focusCrossesMonitorAtEdge
+            {
+                controller.workspaceNavigationHandler.focusMonitor(direction: direction)
+            }
         case .focusPrevious:
             focusPreviousInNiri()
         case let .move(direction):

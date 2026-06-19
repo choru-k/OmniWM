@@ -155,6 +155,80 @@ final class WorkspaceNavigationHandler {
         switchToMonitor(previousId, fromMonitor: currentMonitorId)
     }
 
+    func focusMonitor(direction: Direction) {
+        guard let controller else { return }
+        guard let currentMonitorId = interactionMonitorId(for: controller) else { return }
+        guard let target = controller.workspaceManager.adjacentMonitor(
+            from: currentMonitorId,
+            direction: direction
+        ) else { return }
+        guard let targetWorkspace = controller.workspaceManager.activeWorkspaceOrFirst(on: target.id)
+        else { return }
+
+        let sourceFrame = controller.workspaceManager.focusedToken
+            .flatMap { controller.preferredKeyboardFocusFrame(for: $0) }
+        let candidates = controller.workspaceManager.tiledEntries(in: targetWorkspace.id)
+            .compactMap { entry in
+                controller.preferredKeyboardFocusFrame(for: entry.token).map { (token: entry.token, frame: $0) }
+            }
+
+        if let chosen = Self.spatialNeighborToken(
+            from: sourceFrame,
+            candidates: candidates,
+            direction: direction,
+            targetFrame: controller.insetWorkingFrame(for: target)
+        ) {
+            _ = controller.workspaceManager.rememberFocus(chosen, in: targetWorkspace.id)
+        }
+        switchToMonitor(target.id, fromMonitor: currentMonitorId)
+    }
+
+    static func spatialNeighborToken(
+        from sourceFrame: CGRect?,
+        candidates: [(token: WindowToken, frame: CGRect)],
+        direction: Direction,
+        targetFrame: CGRect
+    ) -> WindowToken? {
+        func crossOverlaps(_ frame: CGRect) -> Bool {
+            guard let sourceFrame else { return true }
+            switch direction {
+            case .left,
+                 .right:
+                return frame.maxY > sourceFrame.minY && frame.minY < sourceFrame.maxY
+            case .up,
+                 .down:
+                return frame.maxX > sourceFrame.minX && frame.minX < sourceFrame.maxX
+            }
+        }
+        func edgeDistance(_ frame: CGRect) -> CGFloat {
+            switch direction {
+            case .left: targetFrame.maxX - frame.maxX
+            case .right: frame.minX - targetFrame.minX
+            case .up: frame.minY - targetFrame.minY
+            case .down: targetFrame.maxY - frame.maxY
+            }
+        }
+        func crossCenter(_ frame: CGRect) -> CGFloat {
+            switch direction {
+            case .left,
+                 .right: frame.midY
+            case .up,
+                 .down: frame.midX
+            }
+        }
+
+        let anchor = sourceFrame.map(crossCenter) ?? crossCenter(targetFrame)
+        return candidates.min { lhs, rhs in
+            let lhsOverlap = crossOverlaps(lhs.frame) ? 0 : 1
+            let rhsOverlap = crossOverlaps(rhs.frame) ? 0 : 1
+            if lhsOverlap != rhsOverlap { return lhsOverlap < rhsOverlap }
+            let lhsEdge = edgeDistance(lhs.frame)
+            let rhsEdge = edgeDistance(rhs.frame)
+            if lhsEdge != rhsEdge { return lhsEdge < rhsEdge }
+            return abs(crossCenter(lhs.frame) - anchor) < abs(crossCenter(rhs.frame) - anchor)
+        }?.token
+    }
+
     private func switchToMonitor(_ targetMonitorId: Monitor.ID, fromMonitor currentMonitorId: Monitor.ID) {
         guard let controller else { return }
 

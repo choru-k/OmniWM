@@ -2062,7 +2062,7 @@ final class RuntimeArchitectureTests: XCTestCase {
             onMonitor: controller.workspaceManager.monitorId(for: workspaceId)
         )
 
-        controller.niriLayoutHandler.focusNeighbor(direction: .right)
+        _ = controller.niriLayoutHandler.focusNeighbor(direction: .right)
         for _ in 0 ..< 40 where focusedTokens.last != secondToken {
             if let refreshTask = controller.layoutRefreshController.layoutState.activeRefreshTask {
                 await refreshTask.value
