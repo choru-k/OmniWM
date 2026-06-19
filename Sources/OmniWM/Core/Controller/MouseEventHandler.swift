@@ -571,7 +571,9 @@ final class MouseEventHandler {
             return false
         }
 
-        guard button == .right,
+        // ponytail: resize on right OR left + modifier, so trackpad users can resize with a
+        // one-finger drag (right-click collides with two-finger scroll/secondary-click).
+        guard button == .right || button == .left,
               Self.modifierFlagsMatch(modifiers, required: controller.settings.mouseResizeModifierKey.cgEventFlag)
         else { return false }
 
@@ -615,6 +617,20 @@ final class MouseEventHandler {
              .rightMouseDragged,
              .rightMouseUp:
             return state.isResizing
+        default:
+            return false
+        }
+    }
+
+    // ponytail: swallow left drag/up while resizing on the left button so the app underneath
+    // (and ⌃-click context menus) don't fire mid-resize. Mirrors the right-button path above.
+    private func shouldSuppressLeftMouseEvent(type: CGEventType) -> Bool {
+        guard state.activeInteractionButton == .left, state.isResizing else { return false }
+        switch type {
+        case .leftMouseDown,
+             .leftMouseDragged,
+             .leftMouseUp:
+            return true
         default:
             return false
         }
@@ -1407,10 +1423,12 @@ final class MouseEventHandler {
             case .mouseMoved:
                 handler.receiveTapMouseMoved(at: screenLocation)
             case .leftMouseDown:
-                _ = handler.receiveTapMouseDown(at: screenLocation, modifiers: modifiers)
+                suppressEvent = handler.receiveTapMouseDown(at: screenLocation, modifiers: modifiers)
             case .leftMouseDragged:
+                suppressEvent = handler.shouldSuppressLeftMouseEvent(type: type)
                 handler.receiveTapMouseDragged(at: screenLocation)
             case .leftMouseUp:
+                suppressEvent = handler.shouldSuppressLeftMouseEvent(type: type)
                 handler.receiveTapMouseUp(at: screenLocation)
             case .rightMouseDown:
                 suppressEvent = handler.receiveTapMouseDown(
