@@ -15,7 +15,12 @@ final class F15EventTap {
     private var didRequestInputMonitoring = false
     private(set) var statusDescription = "not configured"
 
-    func configure(enabled: Bool, doubleTapSeconds: Double) {
+    func configure(
+        enabled: Bool,
+        doubleTapSeconds: Double,
+        chords: [KeyBinding: HotkeyCommand] = F15ChordEngine.defaultChords
+    ) {
+        engine.setChords(chords)
         engine.configure(enabled: enabled, doubleTapSeconds: doubleTapSeconds)
         reinstall()
     }

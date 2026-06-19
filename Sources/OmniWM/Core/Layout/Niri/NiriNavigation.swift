@@ -4,6 +4,14 @@
 import AppKit
 import Foundation
 
+enum NiriTabCycle {
+    /// Next tab index with wrap-around; nil when there's nothing to cycle (count <= 1).
+    static func wrappedIndex(current: Int, step: Int, count: Int) -> Int? {
+        guard count > 1 else { return nil }
+        return ((current + step) % count + count) % count // handles negative step
+    }
+}
+
 extension NiriLayoutEngine {
     private func updateActiveTileIdx(for nodeId: NodeId, in col: NiriContainer) {
         let windowNodes = col.windowNodes
@@ -155,11 +163,9 @@ extension NiriLayoutEngine {
         guard let step = direction.secondaryStep(for: orientation) else { return nil }
 
         let windows = container.windowNodes
-        guard !windows.isEmpty else { return nil }
-
-        let currentIdx = container.activeTileIdx
-        let newIdx = currentIdx + step
-        guard newIdx >= 0, newIdx < windows.count else { return nil }
+        guard let newIdx = NiriTabCycle.wrappedIndex(
+            current: container.activeTileIdx, step: step, count: windows.count
+        ) else { return nil }
 
         container.setActiveTileIdx(newIdx)
         updateTabbedColumnVisibility(column: container)

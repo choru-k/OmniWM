@@ -40,14 +40,36 @@ universal build). Hand-assemble an arm64, ad-hoc-signed app instead:
 ```sh
 swiftly run swift build -c release
 # assemble dist/OmniWM.app/Contents/{MacOS/{OmniWM,omniwmctl},Info.plist,Resources/{AppIcon.icns,OmniWM_OmniWM.bundle}}
-codesign --force --sign - --entitlements OmniWM.entitlements dist/OmniWM.app/Contents/MacOS/OmniWM
-codesign --force --sign - --entitlements OmniWM.entitlements dist/OmniWM.app
+# Sign with the STABLE self-signed identity (see Permissions) so TCC grants survive rebuilds:
+codesign --force --sign "OmniWM Local Signing" --entitlements OmniWM.entitlements dist/OmniWM.app/Contents/MacOS/omniwmctl
+codesign --force --sign "OmniWM Local Signing" --entitlements OmniWM.entitlements dist/OmniWM.app/Contents/MacOS/OmniWM
+codesign --force --sign "OmniWM Local Signing" --entitlements OmniWM.entitlements dist/OmniWM.app
 ditto dist/OmniWM.app /Applications/OmniWM.app
 ln -sf /Applications/OmniWM.app/Contents/MacOS/omniwmctl /opt/homebrew/bin/omniwmctl
 ```
 
 ## Permissions (TCC)
-Grant **Accessibility** (tiling) + **Input Monitoring** (F15) to OmniWM. Ad-hoc signing means the
-code identity changes on every rebuild, which **resets the grants** — after a rebuild, run
-`tccutil reset Accessibility com.barut.OmniWM && tccutil reset ListenEvent com.barut.OmniWM`,
-relaunch, and re-toggle. For permanent grants, sign with a stable self-signed identity instead of `--sign -`.
+Grant **Accessibility** (tiling) + **Input Monitoring** (F15) to OmniWM.
+
+**Stable signing identity (so grants survive rebuilds).** Ad-hoc (`--sign -`) signing has no stable
+identity, so TCC keys the grant to the binary's cdhash — every rebuild wipes Accessibility +
+Input Monitoring. The fix is a one-time self-signed code-signing cert; TCC then anchors the grant to
+the cert (stable across rebuilds). The identity **`OmniWM Local Signing`** already lives in the login
+keychain; its cert/key are stashed at `~/.config/omniwm/signing/` for re-import. To recreate it:
+```sh
+cd ~/.config/omniwm/signing   # or regenerate omniwm-cert.conf with CN="OmniWM Local Signing",
+                              #   basicConstraints=critical,CA:false, extendedKeyUsage=critical,codeSigning
+openssl req -x509 -newkey rsa:2048 -nodes -days 3650 -keyout omniwm.key -out omniwm.crt -config omniwm-cert.conf
+openssl pkcs12 -export -legacy -out omniwm.p12 -inkey omniwm.key -in omniwm.crt -passout pass:omniwm
+security import omniwm.p12 -k ~/Library/Keychains/login.keychain-db -P omniwm -T /usr/bin/codesign
+```
+`security find-identity -p codesigning` lists it as `CSSMERR_TP_NOT_TRUSTED` — that's fine, `codesign`
+signs with it anyway (it doesn't need to be a trusted anchor; TCC pins the leaf cert hash).
+
+**One-time grant.** The first install under a new identity still needs a fresh grant — reset once,
+relaunch, toggle Accessibility + Input Monitoring on. After that, rebuilds signed with the *same*
+identity keep the grants:
+```sh
+tccutil reset Accessibility com.barut.OmniWM && tccutil reset ListenEvent com.barut.OmniWM
+```
+(Only needed when switching identities — not on ordinary rebuilds anymore.)

@@ -66,6 +66,11 @@ final class F15ChordEngine {
         reset()
     }
 
+    /// Override the chord map (from `~/.config/omniwm/f15.json`). Empty falls back to defaults.
+    func setChords(_ chords: [KeyBinding: HotkeyCommand]) {
+        self.chords = chords.isEmpty ? F15ChordEngine.defaultChords : chords
+    }
+
     func reset() {
         hold.clear()
         lastF15TapTime = nil
@@ -127,24 +132,6 @@ final class F15ChordEngine {
 
     private static let f15KeyCode = UInt32(kVK_F15)
 
-    // ponytail: chord list hardcoded to the user's Hammerspoon map for v1.
-    // TOML-configurable chords deferred — only [general].f15Enabled / f15DoubleTapSeconds are exposed.
-    static let defaultChords: [KeyBinding: HotkeyCommand] = {
-        let pairs: [(String, HotkeyCommand)] = [
-            ("H", .focus(.left)), ("L", .focus(.right)), ("J", .focus(.down)), ("K", .focus(.up)),
-            ("Shift+H", .move(.left)), ("Shift+L", .move(.right)),
-            ("Shift+J", .move(.down)), ("Shift+K", .move(.up)),
-            ("F", .toggleColumnFullWidth),
-            ("C", .expandColumnToAvailableWidth),
-            ("0", .cycleColumnWidthForward),
-            ("-", .consumeWindowIntoColumn),
-            ("=", .expelWindowFromColumn)
-        ]
-        var map: [KeyBinding: HotkeyCommand] = [:]
-        for (name, command) in pairs {
-            guard let binding = KeySymbolMapper.fromHumanReadable(name), !binding.isUnassigned else { continue }
-            map[binding] = command
-        }
-        return map
-    }()
+    // Built-in defaults; overridable per-user via ~/.config/omniwm/f15.json (see F15Config).
+    static let defaultChords: [KeyBinding: HotkeyCommand] = F15Config.defaults.resolvedChords()
 }

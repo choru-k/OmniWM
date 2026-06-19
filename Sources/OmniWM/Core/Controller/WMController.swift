@@ -323,7 +323,11 @@ final class WMController {
         f15EventTap.onCommand = { [weak self] command in
             _ = self?.commandHandler.handleCommand(command)
         }
-        f15EventTap.configure(enabled: settings.f15Enabled, doubleTapSeconds: settings.f15DoubleTapSeconds)
+        f15EventTap.configure(
+            enabled: settings.f15Enabled,
+            doubleTapSeconds: settings.f15DoubleTapSeconds,
+            chords: F15ConfigStore.loadOrSeed().resolvedChords() // hold-chord map from f15.json
+        )
 
         if dwindleEngine == nil {
             enableDwindleLayout()
