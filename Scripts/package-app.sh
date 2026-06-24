@@ -69,6 +69,9 @@ if [ "$SIGN_AND_NOTARIZE" = "true" ]; then
   echo "Verifying notarization..."
   spctl --assess --verbose=2 "$APP_DIR"
 
+  echo "Checking distribution readiness..."
+  syspolicy_check distribution "$APP_DIR"
+
   rm -f "$ZIP_PATH"
   echo "Done! $APP_DIR is signed and notarized."
 else
