@@ -49,7 +49,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .borders: "square.dashed"
         case .bar: "menubar.rectangle"
         case .hotkeys: "keyboard"
-        case .leader: "command"
+        case .leader: "key"
         case .quakeTerminal: "terminal"
         case .reportIssue: "ladybug"
         }
