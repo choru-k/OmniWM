@@ -32,11 +32,16 @@ OMNIWM_INCLUDE_FOUNDATIONMODELS=1 ~/.swiftly/bin/swiftly run swift build
 (That env var also defines `OMNIWM_FOUNDATION_MODELS`, which re-enables the `#if`-gated factory branch.)
 
 ## macOS-15 SDK shims
-This machine has the 15.5 SDK only. Two upstream spots use macOS-26 APIs and were patched (marked `// ponytail:`):
-- `Sources/OmniWM/UI/VisualEffectsCompatibility.swift` — Liquid Glass (`glassEffect`/`backgroundExtensionEffect`) replaced with the macOS-15 fallbacks (same `omniGlassEffect`/`omniBackgroundExtensionEffect` signatures).
-- `Sources/OmniWM/Core/Surface/SurfaceReconciler.swift` — `DesiredSurfaceScene.empty` → `nonisolated(unsafe) static let` (Sendable flagged on the 15.5 SDK only).
+The toolchain now targets `macosx26.0` (swiftly Swift 6.3.2), so the macOS-26 SDK is present.
 
-Revert both when building against the Xcode 26 SDK.
+- `Sources/OmniWM/UI/VisualEffectsCompatibility.swift` — **restored** to upstream's real Liquid Glass
+  (`glassEffect`/`backgroundExtensionEffect`) behind `#available(macOS 26.0, *)`, with the macOS-15
+  `ultraThinMaterial` fallbacks kept for older systems. (The macOS 26 NavigationSplitView still renders
+  the settings sidebar flat on long/scrolling pages and floating on short ones — that's OS behavior,
+  not these APIs.)
+- `Sources/OmniWM/Core/Surface/SurfaceReconciler.swift` — still carries the `DesiredSurfaceScene.empty`
+  → `nonisolated(unsafe) static let` shim (Sendable flagged on the 15.5 SDK). Harmless on 26; revert if
+  it ever warns.
 
 ## Tests
 No active Xcode here → XCTest won't resolve → upstream's `OmniWMTests` won't compile. `Package.swift`
