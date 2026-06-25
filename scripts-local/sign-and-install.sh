@@ -46,6 +46,10 @@ fi
 
 # 2. Sign omniwmctl, the main binary, then the bundle (inside-out), with entitlements.
 [ -d "$APP" ] || { echo "ERROR: $APP not found — assemble dist/OmniWM.app first (see custom/build.md)"; exit 1; }
+# Sync the bundle Info.plist from the repo root — it carries CFBundleShortVersionString, which
+# upstream bumps on releases. The hand-assembled copy goes stale otherwise (shows the old version).
+cp -f "$REPO/Info.plist" "$APP/Contents/Info.plist"
+echo "==> Version $(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Contents/Info.plist")"
 echo "==> Signing"
 osascript -e 'quit app "OmniWM"' 2>/dev/null || true
 sleep 1
