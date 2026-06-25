@@ -26,6 +26,9 @@ struct SettingsView: View {
             )
         }
         .navigationSplitViewStyle(.balanced)
+        // ponytail: macOS 26 floats the sidebar but leaves it flush to the window's left edge;
+        // add a matching leading inset so the panel floats evenly. Bump if it looks off.
+        .safeAreaPadding(.leading, 10)
         .frame(minWidth: 760, minHeight: 560)
         .onAppear {
             selectedSection = navigation.section

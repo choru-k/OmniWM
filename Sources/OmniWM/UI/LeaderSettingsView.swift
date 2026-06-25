@@ -161,9 +161,9 @@ struct LeaderSettingsView: View {
             Color.clear.frame(width: 12)              // chevron
             Color.clear.frame(width: 18)              // icon preview
             Text("Key").frame(width: 44)
-            Text("Title").frame(width: 120, alignment: .leading)
+            Text("Title").frame(width: 100, alignment: .leading)
             Text("Type").frame(width: 96, alignment: .leading)
-            Text("Target").frame(minWidth: 200, alignment: .leading)
+            Text("Target").frame(minWidth: 150, alignment: .leading)
             Text("Icon").frame(width: 64, alignment: .leading)
             Color.clear.frame(width: 16)              // delete
         }
@@ -235,7 +235,7 @@ struct LeaderSettingsView: View {
             TextField("Title", text: item.title, prompt: Text("Title"))
                 .labelsHidden()
                 .textFieldStyle(.roundedBorder)
-                .frame(width: 120)
+                .frame(width: 100)
 
             Picker("Type", selection: itemTypeBinding(item)) {
                 Text("App").tag(LeaderItemType.app)
@@ -274,7 +274,7 @@ struct LeaderSettingsView: View {
             Label("opens this group", systemImage: "folder")
                 .font(.caption)
                 .foregroundStyle(.secondary)
-                .frame(minWidth: 200, alignment: .leading)
+                .frame(minWidth: 150, alignment: .leading)
         case .app:
             HStack(spacing: 6) {
                 TextField("App", text: Binding(
@@ -286,7 +286,7 @@ struct LeaderSettingsView: View {
                     .frame(minWidth: 140)
                 Button("Choose…") { chooseFile(item, kind: .app) }
             }
-            .frame(minWidth: 200, alignment: .leading)
+            .frame(minWidth: 150, alignment: .leading)
         case .script:
             HStack(spacing: 6) {
                 TextField("Script", text: Binding(
@@ -299,13 +299,13 @@ struct LeaderSettingsView: View {
                     .font(.system(.body, design: .monospaced))
                 Button("Choose…") { chooseFile(item, kind: .script) }
             }
-            .frame(minWidth: 200, alignment: .leading)
+            .frame(minWidth: 150, alignment: .leading)
         case .action:
             actionPicker(selection: Binding(
                 get: { item.wrappedValue.action ?? "" },
                 set: { item.wrappedValue.action = $0 }
             ))
-            .frame(minWidth: 200, alignment: .leading)
+            .frame(minWidth: 150, alignment: .leading)
         }
     }
 
