@@ -12,6 +12,13 @@ let ghosttyMacOSLibraryDirectory = "\(packageDirectory)/Frameworks/GhosttyKit.xc
 // OmniWMFeatureTests target runs regardless.
 let includeXCTestTarget = ProcessInfo.processInfo.environment["OMNIWM_INCLUDE_XCTEST"] == "1"
 
+// Upstream's FoundationModelsIssueEngine uses the @Generable/@Guide macros from Apple's
+// FoundationModels framework, whose macro plugin ships only with a full Apple-Intelligence Xcode
+// toolchain — the swiftly/CLT toolchains this fork builds with can't expand them. Default to
+// excluding that one file (the IssueRewritingFactory falls back to .unsupportedOS without it); opt
+// in with OMNIWM_INCLUDE_FOUNDATIONMODELS=1 on a machine whose toolchain has the macro plugin.
+let includeFoundationModels = ProcessInfo.processInfo.environment["OMNIWM_INCLUDE_FOUNDATIONMODELS"] == "1"
+
 let package = Package(
     name: "OmniWM",
     platforms: [
@@ -50,6 +57,7 @@ let package = Package(
                 .product(name: "TOML", package: "swift-toml")
             ],
             path: "Sources/OmniWM",
+            exclude: includeFoundationModels ? [] : ["Core/IssueReporter/FoundationModelsIssueEngine.swift"],
             resources: [
                 .process("Resources"),
                 .copy("Core/IssueReporter/Prompts")
@@ -57,7 +65,7 @@ let package = Package(
             swiftSettings: [
                 .swiftLanguageMode(.v6),
                 .interoperabilityMode(.C)
-            ],
+            ] + (includeFoundationModels ? [.define("OMNIWM_FOUNDATION_MODELS")] : []),
             linkerSettings: [
                 .linkedFramework("AppKit"),
                 .linkedFramework("ApplicationServices"),

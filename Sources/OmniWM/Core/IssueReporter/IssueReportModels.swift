@@ -54,10 +54,14 @@ protocol IssueRewriting {
 @MainActor
 enum IssueRewritingFactory {
     static func make() -> (engine: (any IssueRewriting)?, availability: IssueAIAvailability) {
+        // ponytail: FoundationModels macro plugin absent on the fork's toolchain; gated out in
+        // Package.swift unless OMNIWM_INCLUDE_FOUNDATIONMODELS=1. Drop the #if when that's the default.
+        #if OMNIWM_FOUNDATION_MODELS
         if #available(macOS 26.0, *) {
             let engine = FoundationModelsIssueEngine()
             return (engine, engine.availability)
         }
+        #endif
         return (nil, .unsupportedOS)
     }
 }

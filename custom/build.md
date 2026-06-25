@@ -19,6 +19,18 @@ Upstream's `OmniWM` lib hard-depends on the `GhosttyKit` binary target (`import 
 The quake terminal is therefore **non-functional**; everything else works. To restore it, build real
 Ghostty's universal `libghostty.a` and drop it in (see upstream `Scripts/ghostty-preflight.sh`).
 
+## FoundationModels issue engine (on-device AI rewrite)
+Upstream's `Core/IssueReporter/FoundationModelsIssueEngine.swift` uses the `@Generable`/`@Guide`
+macros from Apple's `FoundationModels` framework. That macro plugin (`FoundationModelsMacros`) ships
+only with a full Apple-Intelligence Xcode toolchain — neither the swiftly 6.3.2 nor the CLT/Xcode
+swift on this box can expand it, so the file fails to compile. `Package.swift` therefore **excludes
+that one file by default**; `IssueRewritingFactory` falls back to `.unsupportedOS` (the AI rewrite is
+just disabled, the rest of the issue reporter works). Opt back in on a toolchain that has the plugin:
+```sh
+OMNIWM_INCLUDE_FOUNDATIONMODELS=1 ~/.swiftly/bin/swiftly run swift build
+```
+(That env var also defines `OMNIWM_FOUNDATION_MODELS`, which re-enables the `#if`-gated factory branch.)
+
 ## macOS-15 SDK shims
 This machine has the 15.5 SDK only. Two upstream spots use macOS-26 APIs and were patched (marked `// ponytail:`):
 - `Sources/OmniWM/UI/VisualEffectsCompatibility.swift` — Liquid Glass (`glassEffect`/`backgroundExtensionEffect`) replaced with the macOS-15 fallbacks (same `omniGlassEffect`/`omniBackgroundExtensionEffect` signatures).
